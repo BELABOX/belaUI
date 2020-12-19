@@ -1,0 +1,75 @@
+<!--
+    belaUI - web UI for the BELABOX project
+    Copyright (C) 2020 BELABOX project
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <script type="text/javascript" src="/jquery-3.5.1.js"> </script>
+    <script type="text/javascript" src="/jquery-ui-1.12.1.js"> </script>
+    <script type="text/javascript" src="/jquery.ui.touch-punch.js"></script>
+    <link rel="stylesheet" href="/jquery-ui-1.12.1.css">
+  </head>
+  <script type="text/javascript" src="/script.js"></script>
+  <link rel="stylesheet" href="/style.css">
+<body>
+  <div class = "start">
+    <a href="#" id="start_btn">Start</a>
+  </div>
+
+  <a href="#" id="stop_btn" hidden>Stop</a>
+
+  <div id="bitrate">
+    <input type="text" id="bitrate-values" class="slider-values" readonly>
+    <div id="bitrate-slider" class="slider"></div>
+  </div>
+  <ul id="modems"></ul>
+  
+  <div class="collapsible_settings start">
+    <a href='#' class="name">
+      <div class="name">
+        <span class="arrow"></span>
+        Encoder settings
+      </div>
+    </a>
+    <div class="inner">
+      <select name="pipeline" id ="pipeline"></select>
+      <p/>
+
+      <div id="delay">
+        <input type="text" id="delay-value" class="slider-values" readonly>
+        <div id="delay-slider" class="slider"></div>
+      </div>
+    </div> <!-- inner -->
+  </div> <!-- collapsible_settings -->
+
+  <div class="collapsible_settings start">
+    <a href='#' class="name">
+      <div class="name">
+        <span class="arrow"></span>
+        STRLA settings
+      </div>
+    </a>
+    <div class="inner">
+      SRTLA receiver address<br/>
+      <input type="text" id="srtla_addr"><p/>
+      SRTLA receiver port<br/>
+      <input type="text" id="srtla_port">
+    </div> <!-- inner -->
+  </div> <!-- collapsible_settings -->
+
+</body>
+</html>

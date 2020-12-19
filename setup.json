@@ -1,0 +1,5 @@
+{
+  "hw": "jetson",
+  "belacoder_path": "/home/nvidia/belacoder/",
+  "strla_path": "/home/nvidia/srtla/"
+}
