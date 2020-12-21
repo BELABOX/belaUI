@@ -15,149 +15,205 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-var prev_modems;
-var update_timer;
-function enable_updates() {
-  update_timer = setInterval(function() {
-    update_status();
-  }, 1000);
+let prev_modems;
+let update_timer;
+let isStreaming = false;
+
+function enableUpdates() {
+  update_timer = setInterval(updateStatus, 1000);
 }
 
-function show_bitrate(values) {
-  $("#bitrate-values").val("Bitrate: " + values[0] + " - " + values[1] + " Kbps");
-}
-function set_bitrate(values) {
-  $.post('/bitrate', {min_br: values[0], max_br: values[1]});
-}
-function show_delay(value) {
-  $("#delay-value").val("Audio delay: " + value + " ms");
+function updateStatus() {
+  updateStartStopButton();
+  updateModems();
 }
 
-function update_status() {
-  $.getJSON('/status', null, function(data) {
-    if(data) {
-      $('.start').hide();
-      $('#stop_btn').css('background-color', '#cc3712');
-      $('#stop_btn').show();
-    } else {
-      $('#stop_btn').hide();
-      $('a#start_btn').css('background-color', '#12cc4a');
-      $('.start').show();
+async function updateStartStopButton() {
+  const response = await fetch("/status");
+  isStreaming = await response.json();
+
+  if (!response.ok) return;
+
+  if (!isStreaming) {
+    updateButtonAndSettingsShow({
+      add: "btn-success",
+      remove: "btn-danger",
+      settingsShow: true,
+      text: "Start",
+    });
+  } else {
+    updateButtonAndSettingsShow({
+      add: "btn-danger",
+      remove: "btn-success",
+      settingsShow: false,
+      text: "Stop",
+    });
+  }
+}
+
+function updateButtonAndSettingsShow({ add, remove, settingsShow, text }) {
+  const button = document.getElementById("startStop");
+  const settingsDivs = document.getElementById("settings");
+
+  button.classList.add(add);
+  button.classList.remove(remove);
+
+  if (settingsShow) {
+    settingsDivs.classList.remove("d-none");
+  } else {
+    settingsDivs.classList.add("d-none");
+  }
+
+  button.innerHTML = text;
+}
+
+async function updateModems() {
+  const response = await fetch("/modems");
+  const modems = await response.json();
+
+  if (!response.ok) return;
+
+  const modemsList = document.getElementById("modems");
+  let html = "";
+
+  modems.forEach((modem, i) => {
+    let txb = 0;
+
+    if (prev_modems && i in prev_modems && "txb" in prev_modems[i]) {
+      txb = modem.txb - prev_modems[i].txb;
+      txb = Math.round((txb * 8) / 1024);
     }
+
+    html += `<tr>
+        <td>${modem.i}</td>
+        <td>${modem.ip}</td>
+        <td>${txb} Kbps</td>
+      </tr>`;
   });
 
-  $.getJSON('/modems', null, function(data) {
-    text = "";
-    data.forEach(function(modem, i) {
-      txb = 0;
-      if (prev_modems && i in prev_modems && 'txb' in prev_modems[i]) {
-        txb = modem['txb'] - prev_modems[i]['txb'];
-        txb = Math.round(txb*8/1024);
-      }
-      text += "<li>" + modem['i'] + " - " + modem['ip'] + " - " + txb +" Kbps/s</li>"
-    });
-    $('#modems').html($.parseHTML(text));
-    prev_modems = data;
+  modemsList.innerHTML = html;
+  prev_modems = modems;
+}
+
+async function getPipelines() {
+  const response = await fetch("/pipelines");
+  const pipelines = await response.json();
+
+  if (!response.ok) return;
+
+  const pipelinesSelect = document.getElementById("pipelines");
+
+  pipelines.forEach(({ id, selected, name }) => {
+    const option = document.createElement("option");
+    option.value = id;
+    option.selected = selected;
+    option.innerText = name;
+
+    pipelinesSelect.append(option);
   });
 }
 
-function init_ui() {
-  $('.collapsible_settings div.inner').hide();
-  $('.collapsible_settings span.arrow').each(function() {
-    $(this).html("&#x25BC;")
-  });
-  $('.collapsible_settings a.name').click(function(event) {
-    var parent = $(this).parent();
-    var is_visible = parent.find("div.inner").is(":visible");
-    parent.find("div.inner").slideToggle();
-    parent.find("span.arrow").html(is_visible ? "&#x25BC;" : "&#x25B2;");
-    return false;
-  });
+async function getConfig() {
+  const response = await fetch("/config");
+  const config = await response.json();
 
-  $('#start_btn').click(function() {
-    clearInterval(update_timer);
-    $(this).css('background-color', 'white');
-    var pipeline = $("#pipeline").val();
-    var delay = $("#delay-slider").slider("value");
-    var br = $("#bitrate-slider").slider("values");
-    var srtla_addr = $("#srtla_addr").val();
-    var srtla_port = $("#srtla_port").val();
-    $.post('/start', {pipeline: pipeline, delay: delay, min_br: br[0], max_br: br[1], srtla_addr: srtla_addr, srtla_port: srtla_port}, function() {
-      enable_updates();
-    });
-  });
-  $('#stop_btn').click(function() {
-    clearInterval(update_timer);
-    $(this).css('background-color', 'white');
-    $.post('/stop', null, function() {
-      enable_updates();
-    });
-  });
+  if (!response.ok) return;
+
+  init_bitrate_slider([config.min_br ?? 500, config.max_br ?? 5000]);
+  init_delay_slider(config.delay ?? 0);
+
+  document.getElementById("srtlaAddr").value = config["srtla_addr"] ?? "";
+  document.getElementById("srtlaPort").value = config["srtla_port"] ?? "";
+}
+
+function show_delay(value) {
+  document.getElementById("delay-value").value = `Audio delay: ${value} ms`;
 }
 
 function init_delay_slider(default_delay) {
   $("#delay-slider").slider({
     min: -2000,
-		max: 2000,
-		step: 20,
-		value: default_delay,
-		slide: function(event, ui) {
-			show_delay(ui.value);
-		}
-	});
-	show_delay(default_delay);
+    max: 2000,
+    step: 20,
+    value: default_delay,
+    slide: (event, ui) => {
+      show_delay(ui.value);
+    },
+  });
+  show_delay(default_delay);
+}
+
+function showBitrate(values) {
+  document.getElementById(
+    "bitrate-values"
+  ).value = `Bitrate: ${values[0]} - ${values[1]} Kbps`;
+}
+
+function setBitrate([min_br, max_br]) {
+  let formBody = new URLSearchParams();
+  formBody.set("min_br", min_br);
+  formBody.set("max_br", max_br);
+
+  fetch("/bitrate", {
+    method: "POST",
+    body: formBody,
+  });
 }
 
 function init_bitrate_slider(bitrate_defaults) {
   $("#bitrate-slider").slider({
-	  range: true,
-		min: 500,
-		max: 12000,
-		step: 100,
-		values: bitrate_defaults,
-		slide: function(event, ui) {
-		  show_bitrate(ui.values);
-			set_bitrate(ui.values);
-		}
-	});
-	show_bitrate(bitrate_defaults);
+    range: true,
+    min: 500,
+    max: 12000,
+    step: 100,
+    values: bitrate_defaults,
+    slide: (event, ui) => {
+      showBitrate(ui.values);
+      setBitrate(ui.values);
+    },
+  });
+  showBitrate(bitrate_defaults);
 }
 
-function init_srtla_settings(srtla_addr, srtla_port) {
-  $('#srtla_addr').val(srtla_addr);
-  $('#srtla_port').val(srtla_port);
-}
+document.getElementById("startStop").addEventListener("click", () => {
+  clearInterval(update_timer);
 
-$(function() {
-  init_ui();
-
-  // Fetch the pipeline list
-  $.getJSON('/pipelines', null, function(data) {
-    text = "";
-    data.forEach(function(pipeline, id) {
-      selected = "";
-      if (pipeline['selected']) {
-        selected = " selected=\"selected\"";
-      }
-      text += "<option value=\"" + pipeline['id'] + "\"" + selected + ">"
-      + pipeline['name'] + "</option>";
-    });
-    $('#pipeline').html($.parseHTML(text));
-  });
-
-  // Fetch the current config
-  $.getJSON('/config', null, function(data) {
-    var bitrate_defaults = [data['min_br'] || 500, data['max_br'] || 5000];
-    init_bitrate_slider(bitrate_defaults);
-
-    var default_delay = data['delay'] || 0;
-    init_delay_slider(default_delay);
-
-    var srtla_addr = data['srtla_addr'] || '';
-    var srtla_port = data['srtla_port'] || '';
-    init_srtla_settings(srtla_addr, srtla_port);
-  });
-
-  update_status();
-  enable_updates();
+  if (!isStreaming) {
+    start();
+  } else {
+    stop();
+  }
 });
+
+async function start() {
+  const [min_br, max_br] = $("#bitrate-slider").slider("values");
+
+  let formBody = new URLSearchParams();
+  formBody.set("pipeline", document.getElementById("pipelines").value);
+  formBody.set("delay", $("#delay-slider").slider("value"));
+  formBody.set("min_br", min_br);
+  formBody.set("max_br", max_br);
+  formBody.set("srtla_addr", document.getElementById("srtlaAddr").value);
+  formBody.set("srtla_port", document.getElementById("srtlaPort").value);
+
+  const response = await fetch("/start", {
+    method: "POST",
+    body: formBody,
+  });
+
+  if (response.ok) {
+    enableUpdates();
+  }
+}
+
+async function stop() {
+  const response = await fetch("/stop", { method: "POST" });
+  if (response.ok) {
+    enable_updates();
+  }
+}
+
+getPipelines();
+getConfig();
+updateStatus();
+enableUpdates();
