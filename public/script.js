@@ -38,25 +38,37 @@ async function updateStartStopButton() {
     updateButtonAndSettingsShow({
       add: "btn-success",
       remove: "btn-danger",
-      settingsShow: true,
       text: "Start",
+      enabled: true,
+      settingsShow: true,
     });
   } else {
     updateButtonAndSettingsShow({
       add: "btn-danger",
       remove: "btn-success",
-      settingsShow: false,
       text: "Stop",
+      enabled: true,
+      settingsShow: false,
     });
   }
 }
 
-function updateButtonAndSettingsShow({ add, remove, settingsShow, text }) {
+function updateButton({ add, remove, text, enabled }) {
   const button = document.getElementById("startStop");
-  const settingsDivs = document.getElementById("settings");
 
   button.classList.add(add);
   button.classList.remove(remove);
+
+  button.innerHTML = text;
+  if (enabled) {
+    button.removeAttribute("disabled")
+  } else {
+    button.setAttribute("disabled", true);
+  }
+}
+
+function updateButtonAndSettingsShow({ add, remove, text, enabled, settingsShow }) {
+  const settingsDivs = document.getElementById("settings");
 
   if (settingsShow) {
     settingsDivs.classList.remove("d-none");
@@ -64,7 +76,7 @@ function updateButtonAndSettingsShow({ add, remove, settingsShow, text }) {
     settingsDivs.classList.add("d-none");
   }
 
-  button.innerHTML = text;
+  updateButton({add, remove, text, enabled });
 }
 
 async function updateModems() {
@@ -179,6 +191,7 @@ document.getElementById("startStop").addEventListener("click", () => {
   clearInterval(update_timer);
 
   if (!isStreaming) {
+    updateButton({text: "Starting..."});
     start();
   } else {
     stop();
@@ -209,7 +222,8 @@ async function start() {
 async function stop() {
   const response = await fetch("/stop", { method: "POST" });
   if (response.ok) {
-    enable_updates();
+    updateStatus();
+    enableUpdates();
   }
 }
 
