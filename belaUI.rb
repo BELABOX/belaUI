@@ -162,6 +162,12 @@ post '/bitrate' do
   json true
 end
 
+post '/command' do
+  error 400 unless ["poweroff", "reboot"].include?(params[:cmd])
+  fork { sleep 1 and exec(params[:cmd]) }
+  json true
+end
+
 get '/generate_204' do
   redirect "http://#{request.host}/"
 end

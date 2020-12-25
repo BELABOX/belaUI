@@ -26,6 +26,7 @@
 
     <link rel="stylesheet" href="/bootstrap.min.css" />
     <link rel="stylesheet" href="/jquery-ui-1.12.1.css" />
+    <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
     <div class="container mt-4" style="max-width: 700px">
@@ -130,7 +131,43 @@
           </div> <!-- collapse -->
         </div> <!-- card -->
 
+        <div class="card mb-2">
+          <div
+            class="card-header bg-success text-center"
+            type="button"
+            data-toggle="collapse"
+            data-target="#collapseThree"
+          >
+            <button
+              class="btn btn-link text-white"
+              type="button"
+              data-toggle="collapse"
+              data-target="#collapseThree"
+              aria-expanded="false"
+              aria-controls="collapseThree"
+            >
+              System
+            </button>
+          </div> <!-- card-header -->
+          <div class="collapse" id="collapseThree">
+            <div class="card-body">
+              <button type="button" id="poweroff" class="btn btn-block btn-danger command-btn">
+                Power off
+              </button>
+              <button type="button" id="reboot" class="btn btn-block btn-danger command-btn">
+                Restart
+              </button>
+            </div>
+          </div> <!-- collapse -->
+        </div> <!-- card -->
+
       </div>
+    </div>
+
+    <div class="overlay" id="overlay_bg"></div>
+    <div class="overlay" id="overlay_text">
+      <p></p>
+      <button type="button" id="refresh_btn" class="btn btn-lg btn-light">Refresh</button>
     </div>
 
     <script type="text/javascript" src="/jquery-3.5.1.js"></script>

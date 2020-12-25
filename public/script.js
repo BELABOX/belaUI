@@ -216,6 +216,36 @@ async function stop() {
   }
 }
 
+function show_overlay(text) {
+  $('#overlay_text p').text(text);
+  $('.overlay').show();
+  setTimeout(function(){
+    $('#refresh_btn').show();
+  }, 2000);
+}
+
+async function send_command(cmd) {
+  let formBody = new URLSearchParams();
+  formBody.set("cmd", cmd);
+
+  const response = await fetch("/command", {
+    method: "POST",
+    body: formBody,
+  });
+
+  if (response.ok) {
+    clearInterval(update_timer);
+    switch(cmd) {
+      case 'reboot':
+        show_overlay('Restarting...');
+        break;
+      case 'poweroff':
+        show_overlay('Powered off');
+        break;
+    }
+  }
+}
+
 document.getElementById("startStop").addEventListener("click", () => {
   clearInterval(update_timer);
 
@@ -225,6 +255,14 @@ document.getElementById("startStop").addEventListener("click", () => {
   } else {
     stop();
   }
+});
+
+$('.command-btn').click(function() {
+  send_command(this.id);
+});
+
+$('#refresh_btn').click(function() {
+  location.reload();
 });
 
 getPipelines();
