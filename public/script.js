@@ -187,17 +187,6 @@ function init_bitrate_slider(bitrate_defaults) {
   showBitrate(bitrate_defaults);
 }
 
-document.getElementById("startStop").addEventListener("click", () => {
-  clearInterval(update_timer);
-
-  if (!isStreaming) {
-    updateButton({text: "Starting..."});
-    start();
-  } else {
-    stop();
-  }
-});
-
 async function start() {
   const [min_br, max_br] = $("#bitrate-slider").slider("values");
 
@@ -226,6 +215,17 @@ async function stop() {
     enableUpdates();
   }
 }
+
+document.getElementById("startStop").addEventListener("click", () => {
+  clearInterval(update_timer);
+
+  if (!isStreaming) {
+    updateButton({text: "Starting..."});
+    start();
+  } else {
+    stop();
+  }
+});
 
 getPipelines();
 getConfig();
