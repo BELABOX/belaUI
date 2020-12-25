@@ -120,7 +120,7 @@ post '/stop' do
   system("pkill -f runner.rb")
   system("killall srtla_send")
   system("killall belacoder")
-  json system("killall client")
+  json true
 end
 
 post '/start' do
