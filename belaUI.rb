@@ -85,7 +85,7 @@ def set_bitrate(params)
   return nil if max_br < 500 or max_br > 12000
   return nil if min_br > max_br
 
-  File.write("#{$setup['belacoder_path']}/br", "#{min_br*1000}\n#{max_br*1000}\n")
+  File.write($setup['bitrate_file'], "#{min_br*1000}\n#{max_br*1000}\n")
 
   return [min_br, max_br]
 end

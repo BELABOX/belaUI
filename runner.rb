@@ -24,11 +24,10 @@ def gen_ip_file(filename)
   file.close()
 end
 
-ips_file = "/tmp/srtla_ips"
-gen_ip_file(ips_file)
-system("#{$setup['srtla_path']}/srtla_send 9000 #{ARGV[2]} #{ARGV[3]} #{ips_file} &")
+gen_ip_file($setup['ips_file'])
+system("#{$setup['srtla_path']}/srtla_send 9000 #{ARGV[2]} #{ARGV[3]} #{$setup['ips_file']} &")
 
 while true do
-  system("#{$setup['belacoder_path']}/belacoder #{ARGV[0]} 127.0.0.1 9000 #{ARGV[1]} #{$setup['belacoder_path']}/br")
+  system("#{$setup['belacoder_path']}/belacoder #{ARGV[0]} 127.0.0.1 9000 #{ARGV[1]} #{$setup['bitrate_file']}")
   sleep 0.5
 end
