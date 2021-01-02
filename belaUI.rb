@@ -124,32 +124,40 @@ post '/stop' do
 end
 
 post '/start' do
-  error 400 unless params[:delay]
+  # delay
+  error(400, "delay not specified") unless params[:delay]
   delay = params[:delay].to_i
-  error 400 if delay > 2000 or delay < -2000
+  error(400, "invalid delay #{delay}") if delay > 2000 or delay < -2000
 
-  error 400 unless params[:pipeline]
+  # pipeline
+  error(400, "pipeline not specified") unless params[:pipeline]
   pipeline = search_pipeline(params[:pipeline])
-  error 400 unless pipeline
+  error(400, "pipeline #{params[:pipeline]} not found") unless pipeline
 
-  error 400 unless (bitrate = set_bitrate(params)) != nil
+  # bitrate
+  if (bitrate = set_bitrate(params)) == nil
+    error(400, "invalid bitrate range #{params[:min_br]} - #{params[:max_br]}")
+  end
 
-  error 400 unless params[:srtla_addr] and params[:srtla_port]
+  # srtla addr & port
+  error(400, "SRTLA address not specified") unless params[:srtla_addr]
+  error(400, "SRTLA port not specified") unless params[:srtla_port]
   srtla_port = params[:srtla_port].to_i
-  error 400 unless srtla_port >= 1 and srtla_port <= 0xFFFF
-
+  if srtla_port <= 0 or srtla_port > 0xFFFF
+    error(400, "invalid SRTLA port #{srtla_port}")
+  end
   begin
     srtla_addr = IPSocket.getaddress(params[:srtla_addr])
     $config['srtla_addr'] = params[:srtla_addr]
   rescue
-    error 400
+    error(400, "failed to resolve SRTLA addr #{params[:srtla_addr]}")
   end
 
-  $config['srtla_port'] = srtla_port
-  $config['min_br'] = bitrate[0]
-  $config['max_br'] = bitrate[1]
   $config['delay'] = delay
   $config['pipeline'] = params[:pipeline]
+  $config['min_br'] = bitrate[0]
+  $config['max_br'] = bitrate[1]
+  $config['srtla_port'] = srtla_port
   save_config()
 
   json fork { exec("ruby #{__dir__}/runner.rb #{pipeline['file']} #{delay} #{srtla_addr} #{srtla_port}") }

@@ -40,3 +40,7 @@ div#overlay_text {
 #refresh_btn {
   display: none;
 }
+
+#errormsg {
+  display: none;
+}

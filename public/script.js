@@ -187,7 +187,18 @@ function init_bitrate_slider(bitrate_defaults) {
   showBitrate(bitrate_defaults);
 }
 
+function show_error(message) {
+  $("#errormsg>span").text(message);
+  $("#errormsg").show();
+}
+
+function hide_error() {
+  $("#errormsg").hide();
+}
+
 async function start() {
+  hide_error();
+
   const [min_br, max_br] = $("#bitrate-slider").slider("values");
 
   let formBody = new URLSearchParams();
@@ -203,9 +214,12 @@ async function start() {
     body: formBody,
   });
 
-  if (response.ok) {
-    enableUpdates();
+  if (!response.ok) {
+    response.text().then(function(error) {
+      show_error("Failed to start the stream: " + error);
+    });
   }
+  enableUpdates();
 }
 
 async function stop() {
@@ -263,6 +277,11 @@ $('.command-btn').click(function() {
 
 $('#refresh_btn').click(function() {
   location.reload();
+});
+
+$(".alert").on("close.bs.alert", function () {
+  $(this).fadeOut(300);
+  return false;
 });
 
 getPipelines();
