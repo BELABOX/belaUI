@@ -28,6 +28,6 @@ gen_ip_file($setup['ips_file'])
 system("#{$setup['srtla_path']}/srtla_send 9000 #{ARGV[2]} #{ARGV[3]} #{$setup['ips_file']} &")
 
 while true do
-  system("#{$setup['belacoder_path']}/belacoder #{ARGV[0]} 127.0.0.1 9000 #{ARGV[1]} #{$setup['bitrate_file']}")
+  system("#{$setup['belacoder_path']}/belacoder #{ARGV[0]} 127.0.0.1 9000 -d #{ARGV[1]} -b #{$setup['bitrate_file']}")
   sleep 0.5
 end
