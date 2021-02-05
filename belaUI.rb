@@ -74,7 +74,7 @@ def search_pipeline(id)
 end
 
 def is_active
-  `ps -aux |grep srtla|grep -v grep`.lines.count > 0
+  `ps -aux |grep runner.rb |grep -v grep`.lines.count > 0
 end
 
 def set_bitrate(params)
