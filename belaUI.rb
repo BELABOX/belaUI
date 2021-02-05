@@ -125,7 +125,7 @@ end
 
 post '/start' do
   # delay
-  error(400, "delay not specified") unless params[:delay]
+  error(400, "audio delay not specified") unless params[:delay]
   delay = params[:delay].to_i
   error(400, "invalid delay #{delay}") if delay > 2000 or delay < -2000
 
