@@ -1,6 +1,6 @@
 =begin
     belaUI - web UI for the BELABOX project
-    Copyright (C) 2020 BELABOX project
+    Copyright (C) 2020-2021 BELABOX project
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
