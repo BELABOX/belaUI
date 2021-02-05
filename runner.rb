@@ -25,9 +25,44 @@ def gen_ip_file(filename)
 end
 
 gen_ip_file($setup['ips_file'])
-system("#{$setup['srtla_path']}/srtla_send 9000 #{ARGV[2]} #{ARGV[3]} #{$setup['ips_file']} &")
+
+srtla_send_cmd = [
+  "#{$setup['srtla_path']}/srtla_send",
+  "9000",                 # srtla_send listening port
+  ARGV[2],                # srtla receiver's addr
+  ARGV[3],                # srtla receiver's port
+  $setup['ips_file']
+]
+
+belacoder_cmd = [
+  "#{$setup['belacoder_path']}/belacoder",
+  ARGV[0],                # pipeline
+  "127.0.0.1",            # srtla_send address
+  "9000",                 # srtla_send listening port
+  "-d",
+  ARGV[1],                # audio delay
+  "-b",
+  $setup['bitrate_file'], # bitrate limits file
+  "-l",
+  ARGV[4],                # srt latency
+]
+
+if ARGV[5] and ARGV[5].length > 0
+  # append -s streamid
+  belacoder_cmd.push("-s")
+  belacoder_cmd.push(ARGV[5])
+end
+
+fork do
+  srtla_send_proc = IO.popen(srtla_send_cmd)
+  Process.wait(srtla_send_proc.pid)
+
+  sleep 0.5
+end
 
 while true do
-  system("#{$setup['belacoder_path']}/belacoder #{ARGV[0]} 127.0.0.1 9000 -d #{ARGV[1]} -b #{$setup['bitrate_file']}")
+  belacoder_proc = IO.popen(belacoder_cmd)
+  Process.wait(belacoder_proc.pid)
+
   sleep 0.5
 end

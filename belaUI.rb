@@ -139,6 +139,15 @@ post '/start' do
     error(400, "invalid bitrate range #{params[:min_br]} - #{params[:max_br]}")
   end
 
+  # srt latency
+  error(400, "SRT latency not specified") unless params[:srt_latency]
+  srt_latency = params[:srt_latency].to_i
+  error(400, "invalid SRT latency #{srt_latency} ms") if srt_latency < 100 or srt_latency > 10000
+
+  # srt streamid
+  error(400, "SRT streamid not specified") unless params[:srt_streamid]
+  srt_streamid = params[:srt_streamid].strip
+
   # srtla addr & port
   error(400, "SRTLA address not specified") unless params[:srtla_addr]
   error(400, "SRTLA port not specified") unless params[:srtla_port]
@@ -158,9 +167,20 @@ post '/start' do
   $config['min_br'] = bitrate[0]
   $config['max_br'] = bitrate[1]
   $config['srtla_port'] = srtla_port
+  $config['srt_latency'] = srt_latency
+  $config['srt_streamid'] = srt_streamid
   save_config()
 
-  json fork { exec("ruby #{__dir__}/runner.rb #{pipeline['file']} #{delay} #{srtla_addr} #{srtla_port}") }
+  IO.popen([
+    'ruby', "#{__dir__}/runner.rb",
+     pipeline['file'],
+     delay.to_s,
+     srtla_addr,
+     srtla_port.to_s,
+     srt_latency.to_s,
+     srt_streamid])
+
+  json true
 end
 
 post '/bitrate' do

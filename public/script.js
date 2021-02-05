@@ -133,7 +133,9 @@ async function getConfig() {
 
   init_bitrate_slider([config.min_br ?? 500, config.max_br ?? 5000]);
   init_delay_slider(config.delay ?? 0);
+  init_srt_latency_slider(config.srt_latency ?? 2000);
 
+  document.getElementById("srtStreamid").value = config["srt_streamid"] ?? "";
   document.getElementById("srtlaAddr").value = config["srtla_addr"] ?? "";
   document.getElementById("srtlaPort").value = config["srtla_port"] ?? "";
 }
@@ -187,6 +189,23 @@ function init_bitrate_slider(bitrate_defaults) {
   showBitrate(bitrate_defaults);
 }
 
+function show_srt_latency(value) {
+  document.getElementById("srtLatencyValue").value = `SRT latency: ${value} ms`;
+}
+
+function init_srt_latency_slider(default_latency) {
+  $("#srtLatencySlider").slider({
+    min: 100,
+    max: 4000,
+    step: 100,
+    value: default_latency,
+    slide: (event, ui) => {
+      show_srt_latency(ui.value);
+    },
+  });
+  show_srt_latency(default_latency);
+}
+
 function show_error(message) {
   $("#errorMsg>span").text(message);
   $("#errorMsg").show();
@@ -208,6 +227,8 @@ async function start() {
   formBody.set("max_br", max_br);
   formBody.set("srtla_addr", document.getElementById("srtlaAddr").value);
   formBody.set("srtla_port", document.getElementById("srtlaPort").value);
+  formBody.set("srt_streamid", document.getElementById("srtStreamid").value);
+  formBody.set("srt_latency", $("#srtLatencySlider").slider("value"));
 
   const response = await fetch("/start", {
     method: "POST",
