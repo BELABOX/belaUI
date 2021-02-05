@@ -31,7 +31,7 @@
   <body>
     <div class="container mt-4" style="max-width: 700px">
 
-      <div class="alert alert-danger alert-dismissible show" role="alert" id="errormsg">
+      <div class="alert alert-danger alert-dismissible show" role="alert" id="errorMsg">
         <span></span>
         <button type="button" class="close" data-dismiss="alert" aria-label="Close">
           <span aria-hidden="true">&times;</span>
@@ -50,7 +50,7 @@
             class="slider-values form-control"
             readonly
           />
-          <div id="bitrate-slider" class="slider mt-2"></div>
+          <div id="bitrateSlider" class="slider mt-2"></div>
         </div>
       </div>
 
@@ -97,11 +97,11 @@
               <div id="delay" class="form-group">
                 <input
                   type="text"
-                  id="delay-value"
+                  id="delayValue"
                   class="slider-values form-control"
                   readonly
                 />
-                <div id="delay-slider" class="slider mt-2"></div>
+                <div id="delaySlider" class="slider mt-2"></div>
               </div>
             </div>
           </div> <!-- collapse -->
@@ -172,10 +172,10 @@
       </div>
     </div>
 
-    <div class="overlay" id="overlay_bg"></div>
-    <div class="overlay" id="overlay_text">
+    <div class="overlay" id="overlayBG"></div>
+    <div class="overlay" id="overlayText">
       <p></p>
-      <button type="button" id="refresh_btn" class="btn btn-lg btn-light">Refresh</button>
+      <button type="button" id="refreshBtn" class="btn btn-lg btn-light">Refresh</button>
     </div>
 
     <script type="text/javascript" src="/jquery-3.5.1.js"></script>

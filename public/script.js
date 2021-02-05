@@ -139,11 +139,11 @@ async function getConfig() {
 }
 
 function show_delay(value) {
-  document.getElementById("delay-value").value = `Audio delay: ${value} ms`;
+  document.getElementById("delayValue").value = `Audio delay: ${value} ms`;
 }
 
 function init_delay_slider(default_delay) {
-  $("#delay-slider").slider({
+  $("#delaySlider").slider({
     min: -2000,
     max: 2000,
     step: 20,
@@ -173,7 +173,7 @@ function setBitrate([min_br, max_br]) {
 }
 
 function init_bitrate_slider(bitrate_defaults) {
-  $("#bitrate-slider").slider({
+  $("#bitrateSlider").slider({
     range: true,
     min: 500,
     max: 12000,
@@ -188,22 +188,22 @@ function init_bitrate_slider(bitrate_defaults) {
 }
 
 function show_error(message) {
-  $("#errormsg>span").text(message);
-  $("#errormsg").show();
+  $("#errorMsg>span").text(message);
+  $("#errorMsg").show();
 }
 
 function hide_error() {
-  $("#errormsg").hide();
+  $("#errorMsg").hide();
 }
 
 async function start() {
   hide_error();
 
-  const [min_br, max_br] = $("#bitrate-slider").slider("values");
+  const [min_br, max_br] = $("#bitrateSlider").slider("values");
 
   let formBody = new URLSearchParams();
   formBody.set("pipeline", document.getElementById("pipelines").value);
-  formBody.set("delay", $("#delay-slider").slider("value"));
+  formBody.set("delay", $("#delaySlider").slider("value"));
   formBody.set("min_br", min_br);
   formBody.set("max_br", max_br);
   formBody.set("srtla_addr", document.getElementById("srtlaAddr").value);
@@ -231,10 +231,10 @@ async function stop() {
 }
 
 function show_overlay(text) {
-  $('#overlay_text p').text(text);
+  $('#overlayText p').text(text);
   $('.overlay').show();
   setTimeout(function(){
-    $('#refresh_btn').show();
+    $('#refreshBtn').show();
   }, 2000);
 }
 
@@ -275,7 +275,7 @@ $('.command-btn').click(function() {
   send_command(this.id);
 });
 
-$('#refresh_btn').click(function() {
+$('#refreshBtn').click(function() {
   location.reload();
 });
 

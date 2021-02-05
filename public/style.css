@@ -24,23 +24,23 @@ div.overlay {
   display: none;
 }
 
-div#overlay_bg {
+div#overlayBG {
    z-index: 10;
    opacity: 0.8;
    background-color: #000;
 }
 
-div#overlay_text {
+div#overlayText {
   z-index: 11;
   font-size: 70px;
   text-align: center;
   color: #EEE;
 }
 
-#refresh_btn {
+#refreshBtn {
   display: none;
 }
 
-#errormsg {
+#errorMsg {
   display: none;
 }
