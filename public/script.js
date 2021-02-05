@@ -157,7 +157,7 @@ function init_delay_slider(default_delay) {
 
 function showBitrate(values) {
   document.getElementById(
-    "bitrate-values"
+    "bitrateValues"
   ).value = `Bitrate: ${values[0]} - ${values[1]} Kbps`;
 }
 
