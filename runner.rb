@@ -54,10 +54,12 @@ if ARGV[5] and ARGV[5].length > 0
 end
 
 fork do
-  srtla_send_proc = IO.popen(srtla_send_cmd)
-  Process.wait(srtla_send_proc.pid)
+  while true do
+    srtla_send_proc = IO.popen(srtla_send_cmd)
+    Process.wait(srtla_send_proc.pid)
 
-  sleep 0.5
+    sleep 0.5
+  end
 end
 
 while true do
