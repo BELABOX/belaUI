@@ -40,12 +40,10 @@ def in_array(array, search)
 end
 
 def get_modems
-  ignore = "wlan"
   modems = []
 
   addrs = `ip route show`
   addrs.each_line do |line|
-    next if line.match(ignore)
     line = line.split(" ")
     if (srci = in_array(line, 'src')) >= 0
       ip = line[srci+1]
