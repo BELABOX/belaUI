@@ -3,7 +3,7 @@ Description=belaUI service
 After=network.target
 
 [Service]
-# install_service.sh automatically set WorkingDirectory to point to the current directory
+# install_service.sh automatically sets WorkingDirectory to point to the current directory
 WorkingDirectory=/home/nvidia/belaUI
 ExecStart=/usr/bin/ruby ./belaUI.rb -o 0.0.0.0 -p 80
 KillMode=process
