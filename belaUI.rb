@@ -154,8 +154,9 @@ post '/start' do
     error(400, "invalid SRTLA port #{srtla_port}")
   end
   begin
-    srtla_addr = IPSocket.getaddress(params[:srtla_addr])
-    $config['srtla_addr'] = params[:srtla_addr]
+    srtla_addr = params[:srtla_addr].strip
+    IPSocket.getaddress(srtla_addr)
+    $config['srtla_addr'] = srtla_addr
   rescue
     error(400, "failed to resolve SRTLA addr #{params[:srtla_addr]}")
   end
