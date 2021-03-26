@@ -221,22 +221,6 @@ if (setup['hw'] == 'jetson') {
 }
 
 
-/* Streaming status */
-let isStreaming = false;
-function updateStatus() {
-  exec("ps -aux |grep runner.rb |grep -v grep", (error, stdout, stderr) => {
-    const streaming = (error == null);
-
-    if (streaming != isStreaming) {
-      isStreaming = streaming;
-      broadcastMsg('status', {is_streaming: isStreaming});
-    }
-  });
-}
-updateStatus();
-setInterval(updateStatus, 1000);
-
-
 /* Websocket packet handlers */
 function sendError(conn, msg) {
   conn.send(buildMsg('error', {msg: msg}));
@@ -324,9 +308,17 @@ function updateConfig(conn, params, callback) {
   });
 }
 
+
+/* Streaming status */
+let isStreaming = false;
+function updateStatus(status) {
+  isStreaming = status;
+  broadcastMsg('status', {is_streaming: isStreaming});
+}
+
 function start(conn, params) {
   updateConfig(conn, params, function(pipeline) {
-    spawn('ruby', ['runner.rb',
+    let runnerProcess = spawn('ruby', ['runner.rb',
           pipeline,
           config.delay,
           config.srtla_addr,
@@ -334,6 +326,12 @@ function start(conn, params) {
           config.srt_latency,
           config.srt_streamid],
           { stdio: 'inherit' });
+
+    runnerProcess.on('exit', function() {
+      updateStatus(false);
+    });
+
+    updateStatus(true);
   });
 }
 
@@ -343,6 +341,7 @@ function stop() {
   spawnSync("killall", ["srtla_send_upstream"], {detached: true});
   spawnSync("killall", ["belacoder"], {detached: true});
 }
+stop(); // make sure we didn't inherit an orphan runner process
 
 function command(conn, cmd) {
   switch(cmd) {
