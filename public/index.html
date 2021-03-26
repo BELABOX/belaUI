@@ -18,6 +18,8 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <title>BELABOX</title>
+
     <meta charset="utf-8" />
     <meta
       name="viewport"
@@ -29,120 +31,124 @@
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
-    <div class="container mt-4" style="max-width: 700px">
+    <div class="container mt-4" id="page">
 
-      <div class="alert alert-danger alert-dismissible show" role="alert" id="errorMsg">
+      <div class="alert alert-danger alert-dismissible" role="alert" id="errorMsg">
         <span></span>
-        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-          <span aria-hidden="true">&times;</span>
-        </button>
       </div> <!-- .alert -->
 
-      <div class="mb-4">
-        <button type="button" id="startStop" class="btn btn-lg btn-block mb-2">
-          Start
-        </button>
+      <div id="login" class="container card mt-4 p-2">
+        <form>
+          <input type="password" id="password" class="form-control input_user" placeholder="password">
+          <label class="mt-2"><input type="checkbox" id="rememberMe"> remember me</label>
+          <button type="submit" class="btn btn-block mt-0 btn-success btn-netact">Login</button>
+        </form>
+      </div>
 
-        <div class="form-group">
-          <input type="text" id="bitrateValues" class="slider-values form-control" readonly/>
-          <div id="bitrateSlider" class="slider mt-2"></div>
-        </div>
-      </div> <!-- .mb-4 -->
+      <div id="main">
+        <div class="mb-4">
+          <button type="button" id="startStop" class="btn btn-lg btn-block mb-2 btn-netact">
+            Start
+          </button>
 
-      <table class="table mb-4">
-        <thead>
-          <tr>
-            <th scope="col">Port</th>
-            <th scope="col">IP</th>
-            <th scope="col" class="col-6">Bitrate</th>
-          </tr>
-        </thead>
-        <tbody id="modems"></tbody>
-      </table>
+          <div class="form-group">
+            <input type="text" id="bitrateValues" class="slider-values form-control" readonly/>
+            <div id="bitrateSlider" class="slider mt-2"></div>
+          </div>
+        </div> <!-- .mb-4 -->
 
-      <div id="settings">
-        <div class="card mb-2">
-          <div class="card-header bg-success text-center" type="button"
-               data-toggle="collapse" data-target="#collapseOne">
-            <button class="btn btn-link text-white" type="button" data-toggle="collapse"
-                    data-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
-              Encoder settings
-            </button>
-          </div> <!-- card-header -->
+        <table class="table mb-4">
+          <thead>
+            <tr>
+              <th scope="col">Port</th>
+              <th scope="col">IP</th>
+              <th scope="col" class="col-6">Bitrate</th>
+            </tr>
+          </thead>
+          <tbody id="modems"></tbody>
+        </table>
 
-          <div class="collapse" id="collapseOne">
-            <div class="card-body">
-              <div class="form-group">
-                <select class="custom-select" name="pipelines" id="pipelines"></select>
-              </div>
-              <div id="delay" class="form-group">
-                <input type="text" id="delayValue" class="slider-values form-control" readonly/>
-                <div id="delaySlider" class="slider mt-2"></div>
-              </div>
-            </div> <!-- .card-body -->
-          </div> <!-- .collapse -->
-        </div> <!-- .card -->
-
-        <div class="card mb-2">
-          <div class="card-header bg-success text-center" type="button"
-               data-toggle="collapse" data-target="#collapseTwo">
-            <button class="btn btn-link text-white" type="button" data-toggle="collapse"
-              data-target="#collapseTwo" aria-expanded="false" aria-controls="collapseTwo">
-              SRTLA settings
-            </button>
-          </div> <!-- .card-header -->
-
-          <div class="collapse" id="collapseTwo">
-            <div class="card-body">
-              <div class="form-group">
-                <label for="srtlaAddr">SRTLA receiver address</label>
-                <input type="text" class="form-control" id="srtlaAddr" />
-              </div>
-              <div class="form-group">
-                <label for="srtlaPort">SRTLA receiver port</label>
-                <input type="text" class="form-control" id="srtlaPort" />
-              </div>
-              <div class="form-group">
-                <label for="srtStreamid">SRT streamid</label>
-                <input type="text" class="form-control" id="srtStreamid" />
-              </div>
-              <div class="form-group">
-                <input type="text" id="srtLatencyValue" class="slider-values form-control" readonly/>
-                <div id="srtLatencySlider" class="slider mt-2"></div>
-              </div>
-            </div> <!-- .card-body -->
-          </div> <!-- .collapse -->
-        </div> <!-- .card -->
-
-        <div class="card mb-2">
-          <div class="card-header bg-success text-center" type="button"
-               data-toggle="collapse" data-target="#collapseThree">
-            <button class="btn btn-link text-white" type="button" data-toggle="collapse"
-                    data-target="#collapseThree" aria-expanded="false" aria-controls="collapseThree">
-              System
-            </button>
-          </div> <!-- card-header -->
-
-          <div class="collapse" id="collapseThree">
-            <div class="card-body">
-              <button type="button" id="poweroff" class="btn btn-block btn-danger command-btn">
-                Power off
+        <div id="settings">
+          <div class="card mb-2">
+            <div class="card-header bg-success text-center" type="button"
+                 data-toggle="collapse" data-target="#collapseOne">
+              <button class="btn btn-link text-white" type="button" data-toggle="collapse"
+                      data-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
+                Encoder settings
               </button>
-              <button type="button" id="reboot" class="btn btn-block btn-danger command-btn">
-                Restart
-              </button>
-            </div> <!-- .card-body -->
-          </div> <!-- .collapse -->
-        </div> <!-- .card -->
+            </div> <!-- card-header -->
 
-      </div> <!-- #settings -->
+            <div class="collapse" id="collapseOne">
+              <div class="card-body">
+                <div class="form-group">
+                  <select class="custom-select" name="pipelines" id="pipelines"></select>
+                </div>
+                <div id="delay" class="form-group">
+                  <input type="text" id="delayValue" class="slider-values form-control" readonly/>
+                  <div id="delaySlider" class="slider mt-2"></div>
+                </div>
+              </div> <!-- .card-body -->
+            </div> <!-- .collapse -->
+          </div> <!-- .card -->
+
+          <div class="card mb-2">
+            <div class="card-header bg-success text-center" type="button"
+                 data-toggle="collapse" data-target="#collapseTwo">
+              <button class="btn btn-link text-white" type="button" data-toggle="collapse"
+                data-target="#collapseTwo" aria-expanded="false" aria-controls="collapseTwo">
+                SRTLA settings
+              </button>
+            </div> <!-- .card-header -->
+
+            <div class="collapse" id="collapseTwo">
+              <div class="card-body">
+                <div class="form-group">
+                  <label for="srtlaAddr">SRTLA receiver address</label>
+                  <input type="text" class="form-control" id="srtlaAddr" />
+                </div>
+                <div class="form-group">
+                  <label for="srtlaPort">SRTLA receiver port</label>
+                  <input type="text" class="form-control" id="srtlaPort" />
+                </div>
+                <div class="form-group">
+                  <label for="srtStreamid">SRT streamid</label>
+                  <input type="text" class="form-control" id="srtStreamid" />
+                </div>
+                <div class="form-group">
+                  <input type="text" id="srtLatencyValue" class="slider-values form-control" readonly/>
+                  <div id="srtLatencySlider" class="slider mt-2"></div>
+                </div>
+              </div> <!-- .card-body -->
+            </div> <!-- .collapse -->
+          </div> <!-- .card -->
+
+          <div class="card mb-2">
+            <div class="card-header bg-success text-center" type="button"
+                 data-toggle="collapse" data-target="#collapseThree">
+              <button class="btn btn-link text-white" type="button" data-toggle="collapse"
+                      data-target="#collapseThree" aria-expanded="false" aria-controls="collapseThree">
+                System
+              </button>
+            </div> <!-- card-header -->
+
+            <div class="collapse" id="collapseThree">
+              <div class="card-body">
+                <button type="button" id="logout" class="btn btn-block btn-warning btn-netact">
+                  Logout
+                </button>
+                <button type="button" id="poweroff" class="btn btn-block btn-danger command-btn btn-netact">
+                  Power off
+                </button>
+                <button type="button" id="reboot" class="btn btn-block btn-danger command-btn btn-netact">
+                  Restart
+                </button>
+              </div> <!-- .card-body -->
+            </div> <!-- .collapse -->
+          </div> <!-- .card -->
+
+        </div> <!-- #settings -->
+      </div> <!-- #main -->
     </div> <!-- .container -->
-
-    <div class="overlay" id="overlayBG"></div>
-    <div class="overlay" id="overlayText">
-      <p></p>
-      <button type="button" id="refreshBtn" class="btn btn-lg btn-light">Refresh</button>
-    </div>
 
     <script type="text/javascript" src="/jquery-3.5.1.js"></script>
     <script type="text/javascript" src="/jquery-ui-1.12.1.js"></script>
