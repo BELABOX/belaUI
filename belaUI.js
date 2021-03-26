@@ -70,6 +70,28 @@ function savePersistentTokens() {
 }
 
 
+/* Initialize the server */
+const staticHttp = serveStatic("public");
+
+const server = http.createServer(function(req, res) {
+  const done = finalhandler(req, res);
+  staticHttp(req, res, done);
+});
+
+const wss = new ws.Server({ server });
+wss.on('connection', function connection(conn) {
+  conn.on('message', function incoming(msg) {
+    console.log(msg);
+    try {
+      msg = JSON.parse(msg);
+      handleMessage(conn, msg);
+    } catch (err) {
+      console.log(`Error parsing client message: ${err.message}`);
+    }
+  });
+});
+
+
 /* Misc helpers */
 function buildMsg(type, data) {
   const obj = {};
@@ -172,6 +194,31 @@ function updateNetif() {
 }
 updateNetif();
 setInterval(updateNetif, 1000);
+
+
+/* Hardware monitoring */
+let sensors = {};
+function updateSensorsJetson() {
+  let socVoltage = fs.readFileSync('/sys/bus/i2c/drivers/ina3221x/6-0040/iio_device/in_voltage0_input', 'utf8');
+  socVoltage = parseInt(socVoltage) / 1000.0;
+  socVoltage = `${socVoltage.toFixed(3)} V`;
+  let socCurrent = fs.readFileSync('/sys/bus/i2c/drivers/ina3221x/6-0040/iio_device/in_current0_input', 'utf8');
+  socCurrent = parseInt(socCurrent) / 1000.0;
+  socCurrent = `${socCurrent.toFixed(3)} A`
+  let socTemp = fs.readFileSync('/sys/class/thermal/thermal_zone0/temp', 'utf8');
+  socTemp = parseInt(socTemp) / 1000.0;
+  socTemp = `${socTemp.toFixed(1)} °C`;
+
+  sensors['SoC voltage'] = socVoltage;
+  sensors['SoC current'] = socCurrent;
+  sensors['SoC temperature'] = socTemp;
+
+  broadcastMsg('sensors', sensors);
+}
+if (setup['hw'] == 'jetson') {
+  updateSensorsJetson();
+  setInterval(updateSensorsJetson, 1000);
+}
 
 
 /* Streaming status */
@@ -326,6 +373,7 @@ function sendInitialStatus(conn) {
   conn.send(buildMsg('pipelines', getPipelineList()));
   conn.send(buildMsg('status', {is_streaming: isStreaming}));
   conn.send(buildMsg('netif', netif));
+  conn.send(buildMsg('sensors', sensors));
 }
 
 function connAuth(conn, sendToken) {
@@ -404,28 +452,6 @@ function handleMessage(conn, msg) {
     }
   }
 }
-
-
-const staticHttp = serveStatic("public");
-
-const server = http.createServer(function(req, res) {
-  const done = finalhandler(req, res);
-  staticHttp(req, res, done);
-});
-
-const wss = new ws.Server({ server });
-wss.on('connection', function connection(conn) {
-  conn.on('message', function incoming(msg) {
-    console.log(msg);
-    try {
-      msg = JSON.parse(msg);
-      handleMessage(conn, msg);
-    } catch (err) {
-      console.log(`Error parsing client message: ${err.message}`);
-    }
-  });
-});
-
 
 server.listen(80);
 

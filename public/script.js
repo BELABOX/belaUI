@@ -87,6 +87,23 @@ function updateNetif(netifs) {
   modemList.innerHTML = html;
 }
 
+function updateSensors(sensors) {
+  const sensorList = document.getElementById("sensors");
+  let html = "";
+
+  for (const i in sensors) {
+    data = sensors[i];
+    console.log(i);
+
+    html += `<tr>
+              <td>${i}</td>
+              <td>${data}</td>
+            </tr>`;
+  }
+
+  sensorList.innerHTML = html;
+}
+
 
 /* isStreaming status updates */
 function updateStatus(status) {
@@ -178,6 +195,9 @@ function handleMessage(msg) {
         break;
       case 'netif':
         updateNetif(msg[type]);
+        break;
+      case 'sensors':
+        updateSensors(msg[type]);
         break;
       case 'status':
         updateStatus(msg[type]);
