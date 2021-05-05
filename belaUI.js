@@ -199,10 +199,10 @@ setInterval(updateNetif, 1000);
 /* Hardware monitoring */
 let sensors = {};
 function updateSensorsJetson() {
-  let socVoltage = fs.readFileSync('/sys/bus/i2c/drivers/ina3221x/6-0040/iio_device/in_voltage0_input', 'utf8');
+  let socVoltage = fs.readFileSync('/sys/bus/i2c/drivers/ina3221x/6-0040/iio:device0/in_voltage0_input', 'utf8');
   socVoltage = parseInt(socVoltage) / 1000.0;
   socVoltage = `${socVoltage.toFixed(3)} V`;
-  let socCurrent = fs.readFileSync('/sys/bus/i2c/drivers/ina3221x/6-0040/iio_device/in_current0_input', 'utf8');
+  let socCurrent = fs.readFileSync('/sys/bus/i2c/drivers/ina3221x/6-0040/iio:device0/in_current0_input', 'utf8');
   socCurrent = parseInt(socCurrent) / 1000.0;
   socCurrent = `${socCurrent.toFixed(3)} A`
   let socTemp = fs.readFileSync('/sys/class/thermal/thermal_zone0/temp', 'utf8');
