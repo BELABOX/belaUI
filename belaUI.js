@@ -172,7 +172,7 @@ function updateNetif() {
     for (const int of interfaces) {
       try {
         const name = int.split(':')[0]
-        if (name == 'lo') continue;
+        if (name == 'lo' || name.match('^docker')) continue;
 
         let inet_addr = int.match(/inet \d+\.\d+\.\d+\.\d+/);
         if (inet_addr == null) continue;
