@@ -170,22 +170,24 @@ function updateNetif() {
 
     const interfaces = stdout.split("\n\n");
     for (const int of interfaces) {
-      const name = int.split(':')[0]
-      if (name == 'lo') continue;
+      try {
+        const name = int.split(':')[0]
+        if (name == 'lo') continue;
 
-      let inet_addr = int.match(/inet \d+\.\d+\.\d+\.\d+/);
-      if (inet_addr == null) continue;
-      inet_addr = inet_addr[0].split(' ')[1]
+        let inet_addr = int.match(/inet \d+\.\d+\.\d+\.\d+/);
+        if (inet_addr == null) continue;
+        inet_addr = inet_addr[0].split(' ')[1]
 
-      let tx_bytes = int.match(/TX packets \d+  bytes \d+/);
-      tx_bytes = parseInt(tx_bytes[0].split(' ').pop());
-      if (netif[name]) {
-        tp = tx_bytes - netif[name]['txb'];
-      } else {
-        tp = 0;
-      }
+        let tx_bytes = int.match(/TX packets \d+  bytes \d+/);
+        tx_bytes = parseInt(tx_bytes[0].split(' ').pop());
+        if (netif[name]) {
+          tp = tx_bytes - netif[name]['txb'];
+        } else {
+          tp = 0;
+        }
 
-      newints[name] = {ip: inet_addr, txb: tx_bytes, tp: tp};
+        newints[name] = {ip: inet_addr, txb: tx_bytes, tp: tp};
+      } catch (err) {};
     }
     netif = newints;
 
