@@ -1,7 +1,7 @@
 {
   "hw": "jetson",
-  "belacoder_path": "/home/nvidia/belacoder/",
-  "srtla_path": "/home/nvidia/srtla/",
+  "belacoder_path": "/home/belacoder/",
+  "srtla_path": "/home/srtla/",
   "bitrate_file": "/tmp/belacoder_br",
   "ips_file": "/tmp/srtla_ips"
 }
