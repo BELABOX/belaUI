@@ -201,19 +201,26 @@ setInterval(updateNetif, 1000);
 /* Hardware monitoring */
 let sensors = {};
 function updateSensorsJetson() {
-  let socVoltage = fs.readFileSync('/sys/bus/i2c/drivers/ina3221x/6-0040/iio:device0/in_voltage0_input', 'utf8');
-  socVoltage = parseInt(socVoltage) / 1000.0;
-  socVoltage = `${socVoltage.toFixed(3)} V`;
-  let socCurrent = fs.readFileSync('/sys/bus/i2c/drivers/ina3221x/6-0040/iio:device0/in_current0_input', 'utf8');
-  socCurrent = parseInt(socCurrent) / 1000.0;
-  socCurrent = `${socCurrent.toFixed(3)} A`
-  let socTemp = fs.readFileSync('/sys/class/thermal/thermal_zone0/temp', 'utf8');
-  socTemp = parseInt(socTemp) / 1000.0;
-  socTemp = `${socTemp.toFixed(1)} °C`;
+  try {
+    let socVoltage = fs.readFileSync('/sys/bus/i2c/drivers/ina3221x/6-0040/iio:device0/in_voltage0_input', 'utf8');
+    socVoltage = parseInt(socVoltage) / 1000.0;
+    socVoltage = `${socVoltage.toFixed(3)} V`;
+    sensors['SoC voltage'] = socVoltage;
+  } catch(err) {};
 
-  sensors['SoC voltage'] = socVoltage;
-  sensors['SoC current'] = socCurrent;
-  sensors['SoC temperature'] = socTemp;
+  try {
+    let socCurrent = fs.readFileSync('/sys/bus/i2c/drivers/ina3221x/6-0040/iio:device0/in_current0_input', 'utf8');
+    socCurrent = parseInt(socCurrent) / 1000.0;
+    socCurrent = `${socCurrent.toFixed(3)} A`;
+    sensors['SoC current'] = socCurrent;
+  } catch(err) {};
+
+  try {
+    let socTemp = fs.readFileSync('/sys/class/thermal/thermal_zone0/temp', 'utf8');
+    socTemp = parseInt(socTemp) / 1000.0;
+    socTemp = `${socTemp.toFixed(1)} °C`;
+    sensors['SoC temperature'] = socTemp;
+  } catch (err) {};
 
   broadcastMsg('sensors', sensors);
 }
