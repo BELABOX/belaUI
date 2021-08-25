@@ -3,11 +3,14 @@ Description=belaUI service
 After=network.target
 
 [Service]
+User=root
+Group=root
 # install_service.sh automatically sets WorkingDirectory to point to the current directory
 WorkingDirectory=/home/nvidia/belaUI
 ExecStart=/usr/bin/nodejs ./belaUI.js
-KillMode=process
+KillMode=mixed
 Restart=always
+SyslogIdentifier=belaUI
 
 [Install]
 WantedBy=multi-user.target
