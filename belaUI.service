@@ -1,6 +1,6 @@
 [Unit]
 Description=belaUI service
-After=network-online
+After=network.target
 
 [Service]
 User=root
