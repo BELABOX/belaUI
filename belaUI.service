@@ -1,13 +1,21 @@
 [Unit]
 Description=belaUI service
-After=network.target
+After=network-online.target
+Wants=network-online.target systemd-networkd-wait-online.service
+
+StartLimitIntervalSec=500
 
 [Service]
 # install_service.sh automatically sets WorkingDirectory to point to the current directory
+User=root
+Group=root
 WorkingDirectory=/home/nvidia/belaUI
 ExecStart=/usr/bin/ruby ./belaUI.rb -o 0.0.0.0 -p 80
-KillMode=process
+ExecStop=/usr/bin/pkill -f belaUI.rb;/usr/bin/pkill -f runner.rb;/usr/bin/killall srtla_send;/usr/bin/killall belacoder
+KillMode=mixed
 Restart=always
+RestartSec=5s
+SyslogIdentifier=belaUI
 
 [Install]
 WantedBy=multi-user.target
