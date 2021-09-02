@@ -18,22 +18,26 @@
 let isStreaming = false;
 let config = {};
 
-let ws;
+let ws = null;
 
 function tryConnect() {
-  ws = new WebSocket("ws://" + window.location.host);
-  ws.addEventListener('message', function (event) {
+  let c = new WebSocket("ws://" + window.location.host);
+  c.addEventListener('message', function (event) {
     handleMessage(JSON.parse(event.data));
   });
 
-  ws.addEventListener('close', function (event) {
+  c.addEventListener('close', function (event) {
+    ws = null;
+
     showError("Disconnected from BELABOX. Trying to reconnect...");
     setTimeout(tryConnect, 1000);
 
     $('.btn-netact').attr('disabled', true);
   });
 
-  ws.addEventListener('open', function (event) {
+  c.addEventListener('open', function (event) {
+    ws = c;
+
     hideError();
     tryTokenAuth();
     $('.btn-netact').removeAttr('disabled');
@@ -41,6 +45,21 @@ function tryConnect() {
 }
 
 tryConnect();
+
+/* WS keep-alive */
+/* If the browser / tab is in the background, the Javascript may be suspended,
+   while the WS stays connected. In that case we don't want to receive periodic
+   updates from the belaUI server as we'll have to walk through a potentially
+   long list of stale data when the browser / tab regains focus and wakes up.
+
+   The periodic keep-alive packets let the server know that this client is still
+   active and should receive updates.
+*/
+setInterval(function() {
+  if (ws) {
+    ws.send(JSON.stringify({keepalive: null}));
+  }
+}, 10000);
 
 
 /* Authentication */

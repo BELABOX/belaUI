@@ -31,7 +31,7 @@ const CONFIG_FILE = 'config.json';
 const AUTH_TOKENS_FILE = 'auth_tokens.json';
 
 const BCRYPT_ROUNDS = 10;
-
+const ACTIVE_TO = 15000;
 
 /* Read the config and setup files */
 const setup = JSON.parse(fs.readFileSync(SETUP_FILE, 'utf8'));
@@ -80,6 +80,7 @@ const server = http.createServer(function(req, res) {
 
 const wss = new ws.Server({ server });
 wss.on('connection', function connection(conn) {
+  conn.lastActive = Date.now();
   conn.on('message', function incoming(msg) {
     console.log(msg);
     try {
@@ -99,10 +100,10 @@ function buildMsg(type, data) {
   return JSON.stringify(obj);
 }
 
-function broadcastMsg(type, data) {
+function broadcastMsg(type, data, activeMin = 0) {
   const msg = buildMsg(type, data);
   for (const c of wss.clients) {
-    if (c.isAuthed) c.send(msg);
+    if (c.lastActive >= activeMin && c.isAuthed) c.send(msg);
   }
 }
 
@@ -191,7 +192,7 @@ function updateNetif() {
     }
     netif = newints;
 
-    broadcastMsg('netif', netif);
+    broadcastMsg('netif', netif, Date.now() - ACTIVE_TO);
   });
 }
 updateNetif();
@@ -222,7 +223,7 @@ function updateSensorsJetson() {
     sensors['SoC temperature'] = socTemp;
   } catch (err) {};
 
-  broadcastMsg('sensors', sensors);
+  broadcastMsg('sensors', sensors, Date.now() - ACTIVE_TO);
 }
 if (setup['hw'] == 'jetson') {
   updateSensorsJetson();
@@ -428,6 +429,9 @@ function handleMessage(conn, msg) {
 
   for (const type in msg) {
     switch(type) {
+      case 'keepalive':
+        conn.lastActive = Date.now();
+        break;
       case 'start':
         start(conn, msg[type]);
         break;
