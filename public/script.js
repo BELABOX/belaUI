@@ -397,3 +397,13 @@ $('.command-btn').click(function() {
   send_command(this.id);
 });
 
+$('button.showHidePassword').click(function() {
+  const inputField = $(this).parents('.input-group').find('input');
+  if(inputField.attr('type') == 'password') {
+    inputField.attr('type', 'text');
+    $(this).text('Hide');
+  } else {
+    inputField.attr('type', 'password');
+    $(this).text('Show');
+  }
+});

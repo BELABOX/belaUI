@@ -122,7 +122,12 @@
                 </div>
                 <div class="form-group">
                   <label for="srtStreamid">SRT streamid</label>
-                  <input type="text" class="form-control" id="srtStreamid" />
+                  <div class="input-group">
+                    <input type="password" class="form-control" id="srtStreamid" />
+                    <div class="input-group-append">
+                      <button class="btn btn-outline-secondary showHidePassword" type="button">Show</button>
+                    </div>
+                  </div>
                 </div>
                 <div class="form-group">
                   <input type="text" id="srtLatencyValue" class="slider-values form-control" readonly/>
