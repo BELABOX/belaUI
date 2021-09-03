@@ -85,6 +85,11 @@ function handleAuthResult(msg) {
   }
 }
 
+/* Show the revision number */
+function setRevision(rev) {
+  $('span#belaUIRevision').text(rev);
+}
+
 
 /* Network interfaces list */
 function updateNetif(netifs) {
@@ -211,6 +216,9 @@ function handleMessage(msg) {
     switch(type) {
       case 'auth':
         handleAuthResult(msg[type]);
+        break;
+      case 'revision':
+        setRevision(msg[type]);
         break;
       case 'netif':
         updateNetif(msg[type]);

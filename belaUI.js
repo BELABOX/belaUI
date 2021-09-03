@@ -19,7 +19,7 @@ const http = require('http');
 const finalhandler = require('finalhandler');
 const serveStatic = require('serve-static');
 const ws = require('ws');
-const { exec, spawn, spawnSync } = require("child_process");
+const { exec, execSync, spawn, spawnSync } = require("child_process");
 const fs = require('fs')
 const crypto = require('crypto');
 const path = require('path');
@@ -32,6 +32,10 @@ const AUTH_TOKENS_FILE = 'auth_tokens.json';
 
 const BCRYPT_ROUNDS = 10;
 const ACTIVE_TO = 15000;
+
+/* Read the git revision number */
+const revision = execSync('git rev-parse --short HEAD').toString().trim();
+console.log(revision);
 
 /* Read the config and setup files */
 const setup = JSON.parse(fs.readFileSync(SETUP_FILE, 'utf8'));
@@ -383,6 +387,7 @@ function sendInitialStatus(conn) {
   conn.send(buildMsg('status', {is_streaming: isStreaming}));
   conn.send(buildMsg('netif', netif));
   conn.send(buildMsg('sensors', sensors));
+  conn.send(buildMsg('revision', revision));
 }
 
 function connAuth(conn, sendToken) {
