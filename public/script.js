@@ -92,6 +92,10 @@ function setRevision(rev) {
 
 
 /* Network interfaces list */
+function setNetif(name, ip, enabled) {
+  ws.send(JSON.stringify({'netif': {'name': name, 'ip': ip, 'enabled': enabled}}));
+}
+
 function updateNetif(netifs) {
   const modemList = document.getElementById("modems");
   let html = "";
@@ -102,6 +106,7 @@ function updateNetif(netifs) {
     tpKbps = Math.round((data['tp'] * 8) / 1024);
 
     html += `<tr>
+              <td><input type="checkbox" onclick="setNetif('${i}', '${data['ip']}', this.checked)" ${data.enabled ? 'checked' : ''}></td>
               <td>${i}</td>
               <td>${data['ip']}</td>
               <td>${tpKbps} Kbps</td>

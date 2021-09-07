@@ -171,6 +171,7 @@ function updateNetif() {
       return;
     }
 
+    let foundNewInt = false;
     const newints = {};
 
     const interfaces = stdout.split("\n\n");
@@ -191,16 +192,51 @@ function updateNetif() {
           tp = 0;
         }
 
-        newints[name] = {ip: inet_addr, txb: tx_bytes, tp: tp};
+        const enabled = (netif[name] && netif[name].enabled == false) ? false : true;
+        newints[name] = {ip: inet_addr, txb: tx_bytes, tp: tp, enabled: enabled};
+
+        if (!netif[name]) foundNewInt = true;
       } catch (err) {};
     }
     netif = newints;
 
     broadcastMsg('netif', netif, Date.now() - ACTIVE_TO);
+
+    if (foundNewInt && isStreaming) {
+      updateSrtlaIps();
+    }
   });
 }
 updateNetif();
 setInterval(updateNetif, 1000);
+
+function countActiveNetif() {
+  let count = 0;
+  for (const int in netif) {
+    if (netif[int].enabled) count++;
+  }
+  return count;
+}
+
+function handleNetif(conn, msg) {
+  const int = netif[msg['name']];
+  if (!int) return;
+
+  if (int.ip != msg.ip) return;
+
+  if (msg['enabled'] === true || msg['enabled'] === false) {
+    if (!msg['enabled'] && int.enabled && countActiveNetif() == 1) {
+      sendError(conn, "Can't disable all networks");
+    } else {
+      int.enabled = msg['enabled'];
+      if (isStreaming) {
+        updateSrtlaIps();
+      }
+    }
+  }
+
+  conn.send(buildMsg('netif', netif));
+}
 
 
 /* Hardware monitoring */
@@ -335,12 +371,19 @@ function genSrtlaIpList() {
   let count = 0;
 
   for (i in netif) {
-    list += netif[i].ip + "\n";
-    count++;
+    if (netif[i].enabled) {
+      list += netif[i].ip + "\n";
+      count++;
+    }
   }
   fs.writeFileSync(setup.ips_file, list);
 
   return count;
+}
+
+function updateSrtlaIps() {
+  genSrtlaIpList();
+  spawnSync("killall", ['-HUP', "srtla_send"], { detached: true});
 }
 
 function spawnStreamingLoop(command, args) {
@@ -487,6 +530,9 @@ function handleMessage(conn, msg) {
         break;
       case 'command':
         command(conn, msg[type]);
+        break;
+      case 'netif':
+        handleNetif(conn, msg[type]);
         break;
       case 'logout':
         if (conn.authToken) {
