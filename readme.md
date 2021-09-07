@@ -1,4 +1,4 @@
-This implementation of belaUI is deprecated, unmaintained, unsupported and potentially insecure. Use the nodejs-based implementation in the [ws_nodejs](https://github.com/BELABOX/belaUI/tree/ws_nodejs) branch for:
+This implementation of belaUI is deprecated, unmaintained, unsupported and potentially insecure. Use the nodejs-based implementation in the [ws_nodejs](https://github.com/BELABOX/belaUI/tree/ws_nodejs) branch. Migration guide [available here](https://github.com/BELABOX/tutorial/wiki/Migrating-from-the-deprecated-belaUI-implementation-to-the-newer-nodejs-based-implementation). Major improvements are available:
 
 * authentication
 * temperature and on the 4GB Jetson voltage and current measurements
