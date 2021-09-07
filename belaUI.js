@@ -330,29 +330,63 @@ function updateStatus(status) {
   broadcastMsg('status', {is_streaming: isStreaming});
 }
 
+function genSrtlaIpList() {
+  let list = "";
+  let count = 0;
+
+  for (i in netif) {
+    list += netif[i].ip + "\n";
+    count++;
+  }
+  fs.writeFileSync(setup.ips_file, list);
+
+  return count;
+}
+
+function spawnStreamingLoop(command, args) {
+  const process = spawn(command, args, { stdio: 'inherit' });
+  process.on('exit', function() {
+    if (isStreaming)
+      spawnStreamingLoop(command, args);
+  })
+}
+
 function start(conn, params) {
   updateConfig(conn, params, function(pipeline) {
-    let runnerProcess = spawn('ruby', ['runner.rb',
-          pipeline,
-          config.delay,
-          config.srtla_addr,
-          config.srtla_port,
-          config.srt_latency,
-          config.srt_streamid],
-          { stdio: 'inherit' });
+    if (genSrtlaIpList() < 1) {
+      sendError(conn, "Failed to start, no available network connections");
+      return;
+    }
+    isStreaming = true;
 
-    runnerProcess.on('exit', function() {
-      updateStatus(false);
-    });
+    spawnStreamingLoop(setup.srtla_path + '/srtla_send', [
+                         9000,
+                         config.srtla_addr,
+                         config.srtla_port,
+                         setup.ips_file
+                       ]);
+
+    const belacoderArgs = [
+                            pipeline,
+                            '127.0.0.1',
+                            '9000',
+                            '-d', config.delay,
+                            '-b', setup.bitrate_file,
+                            '-l', config.srt_latency,
+                          ];
+    if (config.srt_streamid != '') {
+      belacoderArgs.push('-s');
+      belacoderArgs.push(config.srt_streamid);
+    }
+    spawnStreamingLoop(setup.belacoder_path + '/belacoder', belacoderArgs);
 
     updateStatus(true);
   });
 }
 
 function stop() {
-  spawnSync("pkill", ["-f", "runner.rb"], {detached: true});
+  updateStatus(false);
   spawnSync("killall", ["srtla_send"], {detached: true});
-  spawnSync("killall", ["srtla_send_upstream"], {detached: true});
   spawnSync("killall", ["belacoder"], {detached: true});
 }
 stop(); // make sure we didn't inherit an orphan runner process
