@@ -42,6 +42,21 @@ console.log(revision);
 const setup = JSON.parse(fs.readFileSync(SETUP_FILE, 'utf8'));
 console.log(setup);
 
+const belacoderExec = setup.belacoder_path + '/belacoder';
+const srtlaSendExec = setup.srtla_path + '/srtla_send';
+
+function checkExecPath(path) {
+  try {
+    fs.accessSync(path, fs.constants.R_OK);
+  } catch (err) {
+    console.log(`\n\n${path} not found, double check the settings in setup.json`);
+    process.exit(1);
+  }
+}
+
+checkExecPath(belacoderExec);
+checkExecPath(srtlaSendExec);
+
 const config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
 // Update the password hash if the config file has a password set
 if (config.password) {
@@ -407,7 +422,7 @@ function start(conn, params) {
     }
     isStreaming = true;
 
-    spawnStreamingLoop(setup.srtla_path + '/srtla_send', [
+    spawnStreamingLoop(srtlaSendExec, [
                          9000,
                          config.srtla_addr,
                          config.srtla_port,
@@ -426,7 +441,7 @@ function start(conn, params) {
       belacoderArgs.push('-s');
       belacoderArgs.push(config.srt_streamid);
     }
-    spawnStreamingLoop(setup.belacoder_path + '/belacoder', belacoderArgs);
+    spawnStreamingLoop(belacoderExec, belacoderArgs);
 
     updateStatus(true);
   });
