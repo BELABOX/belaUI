@@ -303,20 +303,20 @@ function startError(conn, msg) {
 }
 
 function setBitrate(params) {
-  if (params.min_br == undefined || params.max_br == undefined) return null;
-  if (params.min_br < 500 || params.min_br > 12000) return null;
-  if (params.max_br < 500 || params.max_br > 12000) return null;
-  if (params.min_br > params.max_br) return null;
+  const minBr = 300; // Kbps
 
-  config.min_br = params.min_br;
+  if (params.max_br == undefined) return null;
+  if (params.max_br < minBr || params.max_br > 12000) return null;
+
   config.max_br = params.max_br;
   saveConfig();
 
-  fs.writeFileSync(setup.bitrate_file, params.min_br*1000 + "\n" + params.max_br*1000 + "\n");
+  fs.writeFileSync(setup.bitrate_file, minBr*1000 + "\n"
+                   + config.max_br*1000 + "\n");
 
   spawnSync("killall", ['-HUP', "belacoder"], { detached: true});
 
-  return [params.min_br, params.max_br];
+  return config.max_br;
 }
 
 function updateConfig(conn, params, callback) {
@@ -544,7 +544,7 @@ function handleMessage(conn, msg) {
         if (isStreaming) {
           const br = setBitrate(msg[type]);
           if (br != null) {
-            broadcastMsgExcept(conn, 'bitrate', {min_br: br[0], max_br: br[1]});
+            broadcastMsgExcept(conn, 'bitrate', {max_br: br});
           }
         }
         break;

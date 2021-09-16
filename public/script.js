@@ -178,7 +178,7 @@ function updateStatus(status) {
 function loadConfig(c) {
   config = c;
 
-  initBitrateSlider([c.min_br ?? 500, config.max_br ?? 5000]);
+  initBitrateSlider(config.max_br ?? 5000);
   initDelaySlider(config.delay ?? 0);
   initSrtLatencySlider(config.srt_latency ?? 2000);
   updatePipelines(null);
@@ -213,9 +213,8 @@ function updatePipelines(ps) {
 
 /* Bitrate setting updates */
 function updateBitrate(br) {
-  let val = [br.min_br, br.max_br];
-  $('#bitrateSlider').slider('option', 'values', val);
-  showBitrate(val);
+  $('#bitrateSlider').slider('option', 'value', br.max_br);
+  showBitrate(br.max_br);
 }
 
 
@@ -269,12 +268,11 @@ function handleMessage(msg) {
 
 /* Start / stop */
 function getConfig() {
-  const [minBr, maxBr] = $("#bitrateSlider").slider("values");
+  const maxBr = $("#bitrateSlider").slider("value");
 
   let config = {};
   config.pipeline = document.getElementById("pipelines").value;
   config.delay = $("#delaySlider").slider("value");
-  config.min_br = minBr;
   config.max_br = maxBr;
   config.srtla_addr = document.getElementById("srtlaAddr").value;
   config.srtla_port = document.getElementById("srtlaPort").value;
@@ -327,31 +325,31 @@ function updateButtonAndSettingsShow({ add, remove, text, enabled, settingsShow 
 }
 
 
-function setBitrate([min, max]) {
+function setBitrate(max) {
   if (isStreaming) {
-    ws.send(JSON.stringify({bitrate: {min_br: min, max_br: max}}));
+    ws.send(JSON.stringify({bitrate: {max_br: max}}));
   }
 }
 
-function showBitrate(values) {
+function showBitrate(value) {
   document.getElementById(
     "bitrateValues"
-  ).value = `Bitrate: ${values[0]} - ${values[1]} Kbps`;
+  ).value = `Max bitrate: ${value} Kbps`;
 }
 
-function initBitrateSlider(bitrateDefaults) {
+function initBitrateSlider(bitrateDefault) {
   $("#bitrateSlider").slider({
-    range: true,
-    min: 500,
+    range: false,
+    min: 300,
     max: 12000,
     step: 100,
-    values: bitrateDefaults,
+    value: bitrateDefault,
     slide: (event, ui) => {
-      showBitrate(ui.values);
-      setBitrate(ui.values);
+      showBitrate(ui.value);
+      setBitrate(ui.value);
     },
   });
-  showBitrate(bitrateDefaults);
+  showBitrate(bitrateDefault);
 }
 
 function showDelay(value) {
