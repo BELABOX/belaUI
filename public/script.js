@@ -96,21 +96,37 @@ function setNetif(name, ip, enabled) {
   ws.send(JSON.stringify({'netif': {'name': name, 'ip': ip, 'enabled': enabled}}));
 }
 
+function genNetifEntry(enabled, name, ip, throughput) {
+  let checkbox = '';
+  if (enabled != undefined) {
+    checkbox = `<input type="checkbox" onclick="setNetif('${name}', '${ip}', this.checked)" ${enabled ? 'checked' : ''}>`;
+  }
+
+  html = `<tr>
+            <td>${checkbox}</td>
+            <td>${name}</td>
+            <td>${ip}</td>
+            <td>${throughput}</td>
+          </tr>`;
+  return html;
+}
+
 function updateNetif(netifs) {
   const modemList = document.getElementById("modems");
   let html = "";
+  let totalKbps = 0;
 
   for (const i in netifs) {
     data = netifs[i];
     console.log(i);
     tpKbps = Math.round((data['tp'] * 8) / 1024);
+    totalKbps += tpKbps;
 
-    html += `<tr>
-              <td><input type="checkbox" onclick="setNetif('${i}', '${data['ip']}', this.checked)" ${data.enabled ? 'checked' : ''}></td>
-              <td>${i}</td>
-              <td>${data['ip']}</td>
-              <td>${tpKbps} Kbps</td>
-            </tr>`;
+    html += genNetifEntry(data.enabled, i, data['ip'], `${tpKbps} Kbps`);
+  }
+
+  if (Object.keys(netifs).length > 1) {
+    html += genNetifEntry(undefined, '', '', `<b>${totalKbps} Kbps</b>`);
   }
 
   modemList.innerHTML = html;
