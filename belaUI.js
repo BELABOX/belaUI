@@ -25,6 +25,7 @@ const crypto = require('crypto');
 const path = require('path');
 const dns = require('dns');
 const bcrypt = require('bcrypt');
+const process = require('process');
 
 const SETUP_FILE = 'setup.json';
 const CONFIG_FILE = 'config.json';
@@ -44,6 +45,10 @@ console.log(setup);
 const config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
 // Update the password hash if the config file has a password set
 if (config.password) {
+  if (config.password == 'changeme') {
+    console.log("\n\nYou must edit config.json to change the default password\n");
+    process.exit(1);
+  }
   setPassword(config.password);
   delete config.password;
   saveConfig();
