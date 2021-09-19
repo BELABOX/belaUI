@@ -340,9 +340,9 @@ function showBitrate(value) {
 function initBitrateSlider(bitrateDefault) {
   $("#bitrateSlider").slider({
     range: false,
-    min: 300,
+    min: 500,
     max: 12000,
-    step: 100,
+    step: 250,
     value: bitrateDefault,
     slide: (event, ui) => {
       showBitrate(ui.value);
