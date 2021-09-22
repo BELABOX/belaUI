@@ -215,7 +215,9 @@ function updateNetif() {
         const enabled = (netif[name] && netif[name].enabled == false) ? false : true;
         newints[name] = {ip: inet_addr, txb: tx_bytes, tp: tp, enabled: enabled};
 
-        if (!netif[name]) foundNewInt = true;
+        if (!netif[name] || netif[name].ip != inet_addr) {
+          foundNewInt = true;
+        }
       } catch (err) {};
     }
     netif = newints;
