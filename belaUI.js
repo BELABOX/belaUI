@@ -362,7 +362,6 @@ function updateConfig(conn, params, callback) {
     if (err == null) {
       config.delay = params.delay;
       config.pipeline = params.pipeline;
-      config.min_br = params.min_br;
       config.max_br = params.max_br;
       config.srt_latency = params.srt_latency;
       config.srt_streamid = params.srt_streamid;
