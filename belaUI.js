@@ -34,10 +34,6 @@ const AUTH_TOKENS_FILE = 'auth_tokens.json';
 const BCRYPT_ROUNDS = 10;
 const ACTIVE_TO = 15000;
 
-/* Read the git revision number */
-const revision = execSync('git rev-parse --short HEAD').toString().trim();
-console.log(revision);
-
 /* Read the config and setup files */
 const setup = JSON.parse(fs.readFileSync(SETUP_FILE, 'utf8'));
 console.log(setup);
@@ -56,6 +52,23 @@ function checkExecPath(path) {
 
 checkExecPath(belacoderExec);
 checkExecPath(srtlaSendExec);
+
+
+/* Read the revision numbers */
+function getRevision(cmd) {
+  try {
+    return execSync(cmd).toString().trim();
+  } catch (err) {
+    return 'unknown revision';
+  }
+}
+
+const revisions = {};
+revisions['belaUI'] = getRevision('git rev-parse --short HEAD');
+revisions['belacoder'] = getRevision(`${belacoderExec} -v`);
+revisions['srtla'] = getRevision(`${srtlaSendExec} -v`);
+console.log(revisions);
+
 
 const config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
 // Update the password hash if the config file has a password set
@@ -485,7 +498,7 @@ function sendInitialStatus(conn) {
   conn.send(buildMsg('status', {is_streaming: isStreaming}));
   conn.send(buildMsg('netif', netif));
   conn.send(buildMsg('sensors', sensors));
-  conn.send(buildMsg('revision', revision));
+  conn.send(buildMsg('revisions', revisions));
 }
 
 function connAuth(conn, sendToken) {

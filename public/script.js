@@ -86,8 +86,14 @@ function handleAuthResult(msg) {
 }
 
 /* Show the revision number */
-function setRevision(rev) {
-  $('span#belaUIRevision').text(rev);
+function setRevisions(revs) {
+  let list = '';
+  for (s in revs) {
+    if (list != '') list += ', ';
+    list += `${s}\xa0${revs[s]}`;
+  }
+
+  $('#revisions').text(list);
 }
 
 
@@ -237,8 +243,8 @@ function handleMessage(msg) {
       case 'auth':
         handleAuthResult(msg[type]);
         break;
-      case 'revision':
-        setRevision(msg[type]);
+      case 'revisions':
+        setRevisions(msg[type]);
         break;
       case 'netif':
         updateNetif(msg[type]);
