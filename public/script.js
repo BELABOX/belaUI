@@ -41,6 +41,8 @@ function tryConnect() {
     hideError();
     tryTokenAuth();
     updateNetact(true);
+
+    if (logStream) sendLogStreamRequest();
   });
 }
 
@@ -768,6 +770,57 @@ function handleWifiResult(msg) {
 }
 
 
+/* Logs */
+const MAX_LOGS = 100;
+const logs = document.getElementById('logs');
+
+function handleLogstream(log) {
+  const { comm, timestamp, message } = log;
+  const date = new Date(timestamp / 1000);
+
+  const html = `<div class="d-flex flex-column card mb-3 p-3">
+                  <div class="d-flex justify-content-between mb-1 font-weight-bold">
+                  <p class="mb-0">${comm}</p>
+                  <p class="mb-0">${date.toLocaleString()}</p>
+                  </div>
+                  <div>
+                  <p class="mb-0"">${message}</p>
+                  </div>
+                </div>`;
+
+  if (logs.childElementCount == MAX_LOGS) logs.lastElementChild.remove();
+
+  logs.insertAdjacentHTML('afterbegin', html);
+}
+
+let chunkBlobs = [];
+function handleLogDownload(log) {
+  if (log.completed) {
+    console.log('Download completed');
+    finalBlob = new Blob(chunkBlobs, { type: 'text/plain' });
+    saveToFile(finalBlob, `BELABOX_${new Date().toJSON()}.txt`);
+    chunkBlobs = [];
+
+    return;
+  }
+
+  console.log('Downloading log');
+
+  const chunk = new Uint8Array(log.chunk.data);
+  const chunkBlob = new Blob([chunk], { type: 'text/plain' });
+  chunkBlobs.push(chunkBlob);
+}
+
+function saveToFile(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(a.href);
+}
+
+
 /* Error messages */
 function showError(message) {
   $("#errorMsg>span").text(message);
@@ -892,6 +945,12 @@ function handleMessage(msg) {
         break;
       case 'wifi':
         handleWifiResult(msg[type]);
+        break;
+      case 'logStream':
+        handleLogstream(msg[type]);
+        break;
+      case 'logDownload':
+        handleLogDownload(msg[type]);
         break;
       case 'error':
         showError(msg[type].msg);
@@ -1200,4 +1259,36 @@ $('input.click-copy').click(function(ev) {
       delete target.copiedTooltipTimer;
     }, 3000);
   }
+});
+
+let logStream = false;
+const logStreamEle = document.querySelectorAll('.logStream');
+const hideSensitive = document.getElementById('logHideSensitive');
+
+logStreamEle.forEach(l => l.addEventListener('click', toggleLog));
+
+function toggleLog() {
+  logStream = !logStream;
+  const hideShow = logStream ? 'Hide' : 'Show';
+  logs.innerHTML = '';
+
+  sendLogStreamRequest();
+
+  const logTable = document.getElementById('logTable');
+  logTable.classList.toggle('d-none');
+
+  logStreamEle.forEach((i) => (i.innerText = `${hideShow} current log`));
+}
+
+function sendLogStreamRequest() {
+  ws.send(JSON.stringify({
+    subscribeLogStream: {
+      show: logStream,
+      hideSensitive: hideSensitive.checked
+    }
+  }));
+}
+
+document.getElementById('logDownload').addEventListener('click', () => {
+  ws.send(JSON.stringify({ downloadLog: { hideSensitive: hideSensitive.checked } }));
 });
