@@ -102,24 +102,34 @@ function setNetif(name, ip, enabled) {
   ws.send(JSON.stringify({'netif': {'name': name, 'ip': ip, 'enabled': enabled}}));
 }
 
-function genNetifEntry(enabled, name, ip, throughput) {
+function genNetifEntry(enabled, name, ip, throughput, isBold = false) {
   let checkbox = '';
   if (enabled != undefined) {
-    checkbox = `<input type="checkbox" onclick="setNetif('${name}', '${ip}', this.checked)" ${enabled ? 'checked' : ''}>`;
+    const esc_name = name.replaceAll("'", "\\'");
+    const esc_ip = name.replaceAll("'", "\\'");
+    checkbox = `<input type="checkbox"
+                 onclick="setNetif('${esc_name}', '${esc_ip}', this.checked)"
+                 ${enabled ? 'checked' : ''}>`;
   }
 
-  html = `<tr>
-            <td>${checkbox}</td>
-            <td>${name}</td>
-            <td>${ip}</td>
-            <td>${throughput}</td>
-          </tr>`;
-  return html;
+  const html = `
+    <tr>
+      <td>${checkbox}</td>
+      <td class="netif_name"></td>
+      <td class="netif_ip"></td>
+      <td class="netif_tp ${isBold ? 'font-weight-bold' : ''}"></td>
+    </tr>`;
+
+  const entry = $($.parseHTML(html));
+  entry.find('.netif_name').text(name);
+  entry.find('.netif_ip').text(ip);
+  entry.find('.netif_tp').text(throughput);
+
+  return entry;
 }
 
 function updateNetif(netifs) {
-  const modemList = document.getElementById("modems");
-  let html = "";
+  let modemList = [];
   let totalKbps = 0;
 
   for (const i in netifs) {
@@ -128,31 +138,35 @@ function updateNetif(netifs) {
     tpKbps = Math.round((data['tp'] * 8) / 1024);
     totalKbps += tpKbps;
 
-    html += genNetifEntry(data.enabled, i, data['ip'], `${tpKbps} Kbps`);
+    modemList.push(genNetifEntry(data.enabled, i, data.ip, `${tpKbps} Kbps`));
   }
 
   if (Object.keys(netifs).length > 1) {
-    html += genNetifEntry(undefined, '', '', `<b>${totalKbps} Kbps</b>`);
+    modemList.push(genNetifEntry(undefined, '', '', `${totalKbps} Kbps`, true));
   }
 
-  modemList.innerHTML = html;
+  $('#modems').html(modemList);
 }
 
 function updateSensors(sensors) {
-  const sensorList = document.getElementById("sensors");
-  let html = "";
+  const sensorList = [];
 
   for (const i in sensors) {
     data = sensors[i];
     console.log(i);
 
-    html += `<tr>
-              <td>${i}</td>
-              <td>${data}</td>
-            </tr>`;
+    const entryHtml = `
+      <tr>
+        <td class="sensor_name"></td>
+        <td class="sensor_value"></td>
+      </tr>`;
+    const entry = $($.parseHTML(entryHtml));
+    entry.find('.sensor_name').text(i);
+    entry.find('.sensor_value').text(data);
+    sensorList.push(entry);
   }
 
-  sensorList.innerHTML = html;
+  $('#sensors').html(sensorList);
 }
 
 
