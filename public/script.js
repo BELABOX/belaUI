@@ -134,7 +134,6 @@ function updateNetif(netifs) {
 
   for (const i in netifs) {
     data = netifs[i];
-    console.log(i);
     tpKbps = Math.round((data['tp'] * 8) / 1024);
     totalKbps += tpKbps;
 
@@ -153,7 +152,6 @@ function updateSensors(sensors) {
 
   for (const i in sensors) {
     data = sensors[i];
-    console.log(i);
 
     const entryHtml = `
       <tr>
