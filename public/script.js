@@ -106,7 +106,7 @@ function genNetifEntry(enabled, name, ip, throughput, isBold = false) {
   let checkbox = '';
   if (enabled != undefined) {
     const esc_name = name.replaceAll("'", "\\'");
-    const esc_ip = name.replaceAll("'", "\\'");
+    const esc_ip = ip.replaceAll("'", "\\'");
     checkbox = `<input type="checkbox"
                  onclick="setNetif('${esc_name}', '${esc_ip}', this.checked)"
                  ${enabled ? 'checked' : ''}>`;
