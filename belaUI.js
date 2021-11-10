@@ -420,11 +420,14 @@ function updateSrtlaIps() {
   spawnSync("killall", ['-HUP', "srtla_send"], { detached: true});
 }
 
-function spawnStreamingLoop(command, args) {
+function spawnStreamingLoop(command, args, cooldown = 100) {
+  if (!isStreaming) return;
+
   const process = spawn(command, args, { stdio: 'inherit' });
-  process.on('exit', function() {
-    if (isStreaming)
-      spawnStreamingLoop(command, args);
+  process.on('exit', function(code) {
+    setTimeout(function() {
+      spawnStreamingLoop(command, args, cooldown);
+    }, cooldown);
   })
 }
 
@@ -455,7 +458,7 @@ function start(conn, params) {
       belacoderArgs.push('-s');
       belacoderArgs.push(config.srt_streamid);
     }
-    spawnStreamingLoop(belacoderExec, belacoderArgs);
+    spawnStreamingLoop(belacoderExec, belacoderArgs, 2000);
 
     updateStatus(true);
   });
