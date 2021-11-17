@@ -220,22 +220,22 @@ function updateNetif() {
         const name = int.split(':')[0]
         if (name == 'lo' || name.match('^docker')) continue;
 
-        let inet_addr = int.match(/inet \d+\.\d+\.\d+\.\d+/);
-        if (inet_addr == null) continue;
-        inet_addr = inet_addr[0].split(' ')[1]
+        let inetAddr = int.match(/inet \d+\.\d+\.\d+\.\d+/);
+        if (inetAddr == null) continue;
+        inetAddr = inetAddr[0].split(' ')[1]
 
-        let tx_bytes = int.match(/TX packets \d+  bytes \d+/);
-        tx_bytes = parseInt(tx_bytes[0].split(' ').pop());
+        let txBytes = int.match(/TX packets \d+  bytes \d+/);
+        txBytes = parseInt(txBytes[0].split(' ').pop());
         if (netif[name]) {
-          tp = tx_bytes - netif[name]['txb'];
+          tp = txBytes - netif[name]['txb'];
         } else {
           tp = 0;
         }
 
         const enabled = (netif[name] && netif[name].enabled == false) ? false : true;
-        newints[name] = {ip: inet_addr, txb: tx_bytes, tp: tp, enabled: enabled};
+        newints[name] = {ip: inetAddr, txb: txBytes, tp, enabled};
 
-        if (!netif[name] || netif[name].ip != inet_addr) {
+        if (!netif[name] || netif[name].ip != inetAddr) {
           foundNewInt = true;
         }
       } catch (err) {};
