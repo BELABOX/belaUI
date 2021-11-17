@@ -33,11 +33,11 @@
   <body>
     <div class="container mt-4" id="page">
 
-      <div class="alert alert-danger alert-dismissible" role="alert" id="errorMsg">
+      <div class="alert alert-danger alert-dismissible d-none" role="alert" id="errorMsg">
         <span></span>
       </div> <!-- .alert -->
 
-      <div id="login" class="container card mt-4 p-2">
+      <div id="login" class="container card mt-4 p-2 d-none">
         <form>
           <input type="password" id="password" class="form-control input_user" placeholder="password">
           <label class="mt-2"><input type="checkbox" id="rememberMe"> remember me</label>
@@ -45,7 +45,7 @@
         </form>
       </div>
 
-      <div id="main">
+      <div id="main" class="d-none">
         <div class="mb-4">
           <button type="button" id="startStop" class="btn btn-lg btn-block mb-2 btn-netact">
             Start

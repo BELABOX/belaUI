@@ -77,8 +77,8 @@ function handleAuthResult(msg) {
     if (msg.auth_token) {
       localStorage.setItem('authToken', msg.auth_token);
     }
-    $('#login').hide();
-    $('#main').show();
+    $('#login').addClass('d-none');
+    $('#main').removeClass('d-none');
     hideError();
   } else {
     showLoginForm();
@@ -239,11 +239,11 @@ function updateBitrate(br) {
 /* Error messages */
 function showError(message) {
   $("#errorMsg>span").text(message);
-  $("#errorMsg").show();
+  $("#errorMsg").removeClass('d-none');
 }
 
 function hideError() {
-  $("#errorMsg").hide();
+  $("#errorMsg").addClass('d-none');
 }
 
 
@@ -416,8 +416,8 @@ document.getElementById("startStop").addEventListener("click", () => {
 });
 
 function showLoginForm() {
-  $('#main').hide();
-  $('#login').show();
+  $('#main').addClass('d-none');
+  $('#login').removeClass('d-none');
 }
 
 $('#login>form').submit(function() {

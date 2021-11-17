@@ -21,13 +21,4 @@
 
 #login {
   max-width: 350px;
-  display: none;
-}
-
-#main {
-  display: none
-}
-
-#errorMsg {
-  display: none;
 }
