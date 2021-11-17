@@ -117,7 +117,7 @@ const server = http.createServer(function(req, res) {
 
 const wss = new ws.Server({ server });
 wss.on('connection', function connection(conn) {
-  conn.lastActive = Date.now();
+  conn.lastActive = getms();
   conn.on('message', function incoming(msg) {
     console.log(msg);
     try {
@@ -131,6 +131,13 @@ wss.on('connection', function connection(conn) {
 
 
 /* Misc helpers */
+function getms() {
+  const [sec, ns] = process.hrtime();
+  return sec * 1000 + Math.floor(ns / 1000 / 1000);
+}
+
+
+/* WS helpers */
 function buildMsg(type, data) {
   const obj = {};
   obj[type] = data;
@@ -235,7 +242,7 @@ function updateNetif() {
     }
     netif = newints;
 
-    broadcastMsg('netif', netif, Date.now() - ACTIVE_TO);
+    broadcastMsg('netif', netif, getms() - ACTIVE_TO);
 
     if (foundNewInt && isStreaming) {
       updateSrtlaIps();
@@ -298,7 +305,7 @@ function updateSensorsJetson() {
     sensors['SoC temperature'] = socTemp;
   } catch (err) {};
 
-  broadcastMsg('sensors', sensors, Date.now() - ACTIVE_TO);
+  broadcastMsg('sensors', sensors, getms() - ACTIVE_TO);
 }
 if (setup['hw'] == 'jetson') {
   updateSensorsJetson();
@@ -549,7 +556,7 @@ function handleMessage(conn, msg) {
   for (const type in msg) {
     switch(type) {
       case 'keepalive':
-        conn.lastActive = Date.now();
+        conn.lastActive = getms();
         break;
       case 'start':
         start(conn, msg[type]);
