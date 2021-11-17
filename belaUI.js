@@ -556,7 +556,7 @@ function handleMessage(conn, msg) {
   for (const type in msg) {
     switch(type) {
       case 'keepalive':
-        conn.lastActive = getms();
+        // NOP - conn.lastActive is updated when receiving any valid message
         break;
       case 'start':
         start(conn, msg[type]);
@@ -592,6 +592,8 @@ function handleMessage(conn, msg) {
         break;
     }
   }
+
+  conn.lastActive = getms();
 }
 
 server.listen(80);
