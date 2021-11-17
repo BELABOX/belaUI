@@ -452,3 +452,5 @@ $('button.showHidePassword').click(function() {
     $(this).text('Show');
   }
 });
+
+$("#errorMsg").click(hideError);
