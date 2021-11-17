@@ -160,7 +160,7 @@ function broadcastMsgExcept(conn, type, data) {
 
 
 /* Read the list of pipeline files */
-function read_dir_abs_path(dir) {
+function readDirAbsPath(dir) {
   const files = fs.readdirSync(dir);
   const basename = path.basename(dir);
   const pipelines = {};
@@ -178,9 +178,9 @@ function read_dir_abs_path(dir) {
 function getPipelines() {
   const ps = {};
   if (setup['hw'] == 'jetson') {
-    Object.assign(ps, read_dir_abs_path(setup['belacoder_path'] + '/pipeline/jetson/'));
+    Object.assign(ps, readDirAbsPath(setup['belacoder_path'] + '/pipeline/jetson/'));
   }
-  Object.assign(ps, read_dir_abs_path(setup['belacoder_path'] + '/pipeline/generic/'));
+  Object.assign(ps, readDirAbsPath(setup['belacoder_path'] + '/pipeline/generic/'));
 
   return ps;
 }
