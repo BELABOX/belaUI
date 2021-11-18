@@ -37,6 +37,9 @@
         <span></span>
       </div> <!-- .alert -->
 
+      <div class="alert d-none" role="alert" id="remoteStatus">
+      </div>
+
       <div id="login" class="container card mt-4 p-2 d-none">
         <form>
           <input type="password" id="password" class="form-control input_user" placeholder="password">
@@ -149,6 +152,22 @@
 
             <div class="collapse" id="collapseThree">
               <div class="card-body">
+
+                <form id="remoteKeyForm">
+                  <div class="form-group">
+                    <label for="remoteDeviceKey">
+                      <a href="https://cloud.belabox.net" target="_blank">BELABOX cloud</a> remote key
+                    </label>
+                    <div class="input-group">
+                      <input type="password" class="form-control" id="remoteDeviceKey"/>
+                      <div class="input-group-append">
+                        <button class="btn btn-outline-secondary showHidePassword" type="button">Show</button>
+                        <button class="btn btn-outline-success" type="submit" disabled>Save</button>
+                      </div> <!-- .input-group-append -->
+                    </div> <!-- .input-group -->
+                  </div> <!-- .form-group -->
+                </form>
+
                 <button type="button" id="logout" class="btn btn-block btn-warning btn-netact">
                   Logout
                 </button>
@@ -159,6 +178,7 @@
                   Restart
                 </button>
                 <div class="mt-3 text-secondary text-center small" id="revisions"></div>
+
               </div> <!-- .card-body -->
             </div> <!-- .collapse -->
           </div> <!-- .card -->

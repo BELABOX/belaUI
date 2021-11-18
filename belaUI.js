@@ -138,23 +138,33 @@ function getms() {
 
 
 /* WS helpers */
-function buildMsg(type, data) {
+function buildMsg(type, data, id = undefined) {
   const obj = {};
   obj[type] = data;
+  obj.id = id;
   return JSON.stringify(obj);
 }
 
-function broadcastMsg(type, data, activeMin = 0) {
+function broadcastMsgLocal(type, data, activeMin = 0, except = undefined) {
   const msg = buildMsg(type, data);
   for (const c of wss.clients) {
-    if (c.lastActive >= activeMin && c.isAuthed) c.send(msg);
+    if (c !== except && c.lastActive >= activeMin && c.isAuthed) c.send(msg);
+  }
+  return msg;
+}
+
+function broadcastMsg(type, data, activeMin = 0) {
+  const msg = broadcastMsgLocal(type, data, activeMin);
+  if (remoteWs && remoteWs.isAuthed) {
+    remoteWs.send(msg);
   }
 }
 
 function broadcastMsgExcept(conn, type, data) {
-  const msg = buildMsg(type, data);
-  for (const c of wss.clients) {
-    if (c != conn && c.isAuthed) c.send(msg);
+  broadcastMsgLocal(type, data, 0, conn);
+  if (remoteWs && remoteWs.isAuthed) {
+    const msg = buildMsg(type, data, conn.senderId);
+    remoteWs.send(msg);
   }
 }
 
@@ -280,6 +290,137 @@ function handleNetif(conn, msg) {
   conn.send(buildMsg('netif', netif));
 }
 
+/* Remote */
+const remoteProtocolVersion = 1;
+const remoteEndpoint = 'wss://remote.belabox.net/ws/remote';
+const remoteTimeout = 5000;
+
+let remoteWs = undefined;
+let remoteStatusHandled = false;
+function handleRemote(conn, msg) {
+  for (const type in msg) {
+    switch (type) {
+      case 'auth/encoder':
+        if (msg[type] === true) {
+          conn.isAuthed = true;
+          sendInitialStatus(conn)
+          broadcastMsgLocal('status', {remote: true}, getms() - ACTIVE_TO);
+          console.log('remote: authenticated');
+        } else {
+          broadcastMsgLocal('status', {remote: {error: 'key'}}, getms() - ACTIVE_TO);
+          remoteStatusHandled = true;
+          conn.terminate();
+          console.log('remote: invalid key');
+        }
+        break;
+    }
+  }
+}
+
+let prevRemoteBindAddr = -1;
+function getRemoteBindAddr() {
+  const netList = Object.keys(netif);
+
+  if (netList.length < 1) {
+    prevRemoteBindAddr = -1;
+    return undefined;
+  }
+
+  prevRemoteBindAddr++;
+  if (prevRemoteBindAddr >= netList.length) {
+    prevRemoteBindAddr = 0;
+  }
+
+  return netif[netList[prevRemoteBindAddr]].ip;
+}
+
+function remoteHandleMsg(msg) {
+  try {
+    msg = JSON.parse(msg);
+    if (msg.remote) {
+      handleRemote(this, msg.remote);
+    }
+    delete msg.remote;
+
+    if (Object.keys(msg).length >= 1) {
+      this.senderId = msg.id;
+      handleMessage(this, msg, true);
+      delete this.senderId;
+    }
+
+    this.lastActive = getms();
+  } catch(err) {
+    console.log(`Error handling remote message: ${err.message}`);
+  }
+}
+
+let remoteConnectTimer;
+function remoteClose() {
+  remoteConnectTimer = setTimeout(remoteConnect, 1000);
+  this.removeListener('close', remoteClose);
+  this.removeListener('message', remoteHandleMsg);
+  remoteWs = undefined;
+
+  if (!remoteStatusHandled) {
+    broadcastMsgLocal('status', {remote: {error: 'network'}}, getms() - ACTIVE_TO);
+  }
+}
+
+function remoteConnect() {
+  if (remoteConnectTimer !== undefined) {
+    clearTimeout(remoteConnectTimer);
+    remoteConnectTimer = undefined;
+  }
+
+  if (config.remote_key) {
+    const bindIp = getRemoteBindAddr();
+    if (!bindIp) {
+      remoteConnectTimer = setTimeout(remoteConnect, 1000);
+      return;
+    }
+    console.log(`remote: trying to connect via ${bindIp}`);
+
+    remoteStatusHandled = false;
+    remoteWs = new ws(remoteEndpoint, options = {localAddress: bindIp});
+    remoteWs.isAuthed = false;
+    remoteWs.lastActive = getms();
+    remoteWs.on('error', function(err) {
+      console.log('remote error: ' + err.message);
+    });
+    remoteWs.on('open', function() {
+      const auth_msg = {remote: {'auth/encoder':
+                        {key: config.remote_key, version: remoteProtocolVersion}
+                       }};
+      this.send(JSON.stringify(auth_msg));
+    });
+    remoteWs.on('close', remoteClose);
+    remoteWs.on('message', remoteHandleMsg);
+  }
+}
+
+function remoteKeepalive() {
+  if (remoteWs) {
+    if ((remoteWs.lastActive + remoteTimeout) < getms()) {
+      remoteWs.terminate();
+    }
+  }
+}
+remoteConnect();
+setInterval(remoteKeepalive, 1000);
+
+function setRemoteKey(key) {
+  config.remote_key = key;
+  saveConfig();
+
+  if (remoteWs) {
+    remoteStatusHandled = true;
+    remoteWs.terminate();
+  }
+  remoteConnect();
+
+  broadcastMsg('config', config);
+}
+
 
 /* Hardware monitoring */
 let sensors = {};
@@ -314,12 +455,13 @@ if (setup['hw'] == 'jetson') {
 
 
 /* Websocket packet handlers */
-function sendError(conn, msg) {
-  conn.send(buildMsg('error', {msg: msg}));
+function sendError(conn, msg, id = undefined) {
+  if (id === undefined) id = conn.senderId;
+  conn.send(buildMsg('error', {msg: msg}, id));
 }
 
-function startError(conn, msg) {
-  sendError(conn, msg);
+function startError(conn, msg, id = undefined) {
+  sendError(conn, msg, id);
   conn.send(buildMsg('status', {is_streaming: false}));
   return false;
 }
@@ -378,6 +520,8 @@ function updateConfig(conn, params, callback) {
   if (params.srtla_port <= 0 || params.srtla_port > 0xFFFF)
     return startError(conn, "invalid SRTLA port " + params.srtla_port);
 
+  // Save the sender's ID in case we'll have to use it in the exception handler
+  const senderId = conn.senderId;
   dns.lookup(params.srtla_addr, function(err, address, family) {
     if (err == null) {
       config.delay = params.delay;
@@ -394,7 +538,7 @@ function updateConfig(conn, params, callback) {
       
       callback(pipeline);
     } else {
-      startError(conn, "failed to resolve SRTLA addr " + params.srtla_addr);
+      startError(conn, "failed to resolve SRTLA addr " + params.srtla_addr, senderId);
     }
   });
 }
@@ -478,6 +622,8 @@ function stop() {
 }
 stop(); // make sure we didn't inherit an orphan runner process
 
+
+/* Misc commands */
 function command(conn, cmd) {
   switch(cmd) {
     case 'poweroff':
@@ -486,6 +632,17 @@ function command(conn, cmd) {
     case 'reboot':
       spawnSync("reboot", {detached: true});
       break;
+  }
+}
+
+
+function handleConfig(conn, msg) {
+  for (const type in msg) {
+    switch(type) {
+      case 'remote_key':
+        setRemoteKey(msg[type]);
+        break;
+    }
   }
 }
 
@@ -542,12 +699,14 @@ function tryAuth(conn, msg) {
 }
 
 
-function handleMessage(conn, msg) {
-  for (const type in msg) {
-    switch(type) {
-      case 'auth':
-        tryAuth(conn, msg[type]);
-        break;
+function handleMessage(conn, msg, isRemote = false) {
+  if (!isRemote) {
+    for (const type in msg) {
+      switch(type) {
+        case 'auth':
+          tryAuth(conn, msg[type]);
+          break;
+      }
     }
   }
 
@@ -574,6 +733,9 @@ function handleMessage(conn, msg) {
         break;
       case 'command':
         command(conn, msg[type]);
+        break;
+      case 'config':
+        handleConfig(conn, msg[type]);
         break;
       case 'netif':
         handleNetif(conn, msg[type]);

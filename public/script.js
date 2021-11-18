@@ -168,26 +168,67 @@ function updateSensors(sensors) {
 }
 
 
-/* isStreaming status updates */
-function updateStatus(status) {
-  isStreaming = status.is_streaming;
+/* Remote status */
+let remoteConnectedHideTimer;
+function showRemoteStatus(status) {
+  if (remoteConnectedHideTimer) {
+    clearTimeout(remoteConnectedHideTimer);
+    remoteConnectedHideTimer = undefined;
+  }
 
-  if (isStreaming) {
-    updateButtonAndSettingsShow({
-      add: "btn-danger",
-      remove: "btn-success",
-      text: "Stop",
-      enabled: true,
-      settingsShow: false,
-    });
+  if (status === true) {
+    $('#remoteStatus').removeClass('alert-danger');
+    $('#remoteStatus').addClass('alert-success');
+    $('#remoteStatus').text("BELABOX cloud remote: connected");
+    remoteConnectedHideTimer = setTimeout(function() {
+      $('#remoteStatus').addClass('d-none');
+      remoteConnectedHideTimer = undefined;
+    }, 5000);
+  } else if (status.error) {
+    switch(status.error) {
+      case 'network':
+        $('#remoteStatus').text("BELABOX cloud remote: network error. Trying to reconnect...\n");
+        break;
+      case 'key':
+        $('#remoteStatus').text("BELABOX cloud remote: invalid key\n");
+        break;
+      default:
+        return;
+    }
+
+    $('#remoteStatus').addClass('alert-danger');
+    $('#remoteStatus').removeClass('alert-success');
   } else {
-    updateButtonAndSettingsShow({
-      add: "btn-success",
-      remove: "btn-danger",
-      text: "Start",
-      enabled: true,
-      settingsShow: true,
-    });
+    return;
+  }
+  $('#remoteStatus').removeClass('d-none');
+}
+
+/* status updates */
+function updateStatus(status) {
+  if (status.is_streaming !== undefined) {
+    isStreaming = status.is_streaming;
+    if (isStreaming) {
+      updateButtonAndSettingsShow({
+        add: "btn-danger",
+        remove: "btn-success",
+        text: "Stop",
+        enabled: true,
+        settingsShow: false,
+      });
+    } else {
+      updateButtonAndSettingsShow({
+        add: "btn-success",
+        remove: "btn-danger",
+        text: "Start",
+        enabled: true,
+        settingsShow: true,
+      });
+    }
+  }
+
+  if (status.remote) {
+    showRemoteStatus(status.remote);
   }
 }
 
@@ -204,6 +245,9 @@ function loadConfig(c) {
   document.getElementById("srtStreamid").value = config.srt_streamid ?? "";
   document.getElementById("srtlaAddr").value = config.srtla_addr ?? "";
   document.getElementById("srtlaPort").value = config.srtla_port ?? "";
+
+  $('#remoteDeviceKey').val(config.remote_key);
+  $('#remoteKeyForm button[type=submit]').prop('disabled', true);
 }
 
 
@@ -429,6 +473,19 @@ $('#login>form').submit(function() {
   ws.send(JSON.stringify(auth_req));
   console.log();
 
+  return false;
+});
+
+
+$('#remoteDeviceKey').on('input', function() {
+  const remote_key = $('#remoteDeviceKey').val();
+  const disabled = (remote_key == config.remote_key);
+  $('#remoteKeyForm button[type=submit]').prop('disabled', disabled);
+});
+
+$('#remoteKeyForm').submit(function() {
+  const remote_key = $('#remoteDeviceKey').val();
+  ws.send(JSON.stringify({config: {remote_key}}));
   return false;
 });
 
