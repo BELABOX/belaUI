@@ -294,6 +294,7 @@ function handleNetif(conn, msg) {
 const remoteProtocolVersion = 1;
 const remoteEndpoint = 'wss://remote.belabox.net/ws/remote';
 const remoteTimeout = 5000;
+const remoteConnectTimeout = 10000;
 
 let remoteWs = undefined;
 let remoteStatusHandled = false;
@@ -383,7 +384,8 @@ function remoteConnect() {
     remoteStatusHandled = false;
     remoteWs = new ws(remoteEndpoint, options = {localAddress: bindIp});
     remoteWs.isAuthed = false;
-    remoteWs.lastActive = getms();
+    // Set a longer initial connection timeout - mostly to deal with slow DNS
+    remoteWs.lastActive = getms() + remoteConnectTimeout - remoteTimeout;
     remoteWs.on('error', function(err) {
       console.log('remote error: ' + err.message);
     });
