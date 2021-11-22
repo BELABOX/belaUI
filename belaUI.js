@@ -585,9 +585,10 @@ function spawnStreamingLoop(command, args, cooldown = 100) {
 }
 
 function start(conn, params) {
+  const senderId = conn.senderId;
   updateConfig(conn, params, function(pipeline) {
     if (genSrtlaIpList() < 1) {
-      startError(conn, "Failed to start, no available network connections");
+      startError(conn, "Failed to start, no available network connections", senderId);
       return;
     }
     isStreaming = true;
