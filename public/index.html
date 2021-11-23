@@ -43,9 +43,31 @@
       <div id="login" class="container card mt-4 p-2 d-none">
         <form>
           <input type="password" id="password" class="form-control input_user" placeholder="password">
-          <label class="mt-2"><input type="checkbox" id="rememberMe"> remember me</label>
+          <label class="mt-2"><input type="checkbox" class="rememberMe"> remember me</label>
           <button type="submit" class="btn btn-block mt-0 btn-success btn-netact">Login</button>
         </form>
+      </div>
+
+      <div id="initialPasswordForm" class="container p-0 card mt-4 d-none">
+        <div class="card-header bg-success text-center text-white">Initial BELABOX setup</div>
+        <div class="card-body">
+
+          <form>
+            <div class="form-group">
+              <label for="initialPassword">Set a password for the LAN web interface (belaUI)</label>
+              <p class="hint text-danger"></p>
+              <div class="input-group">
+                <input type="password" class="form-control set-password" placeholder="password" id="initialPassword"/>
+                <div class="input-group-append">
+                  <button class="btn btn-outline-secondary showHidePassword" type="button">Show</button>
+                </div> <!-- .input-group-append -->
+              </div> <!-- .input-group -->
+              <label class="mt-2"><input type="checkbox" class="rememberMe"> remember me</label>
+              <button type="submit" class="btn btn-block mt-0 btn-success btn-netact">Set password</button>
+            </div> <!-- .form-group -->
+          </form>
+
+        </div>
       </div>
 
       <div id="main" class="d-none">
@@ -152,6 +174,22 @@
 
             <div class="collapse" id="collapseThree">
               <div class="card-body">
+
+                <form id="updatePasswordForm">
+                  <div class="form-group">
+                    <label for="newPassword">
+                      LAN web interface (belaUI) password
+                    </label>
+                    <p class="hint text-danger"></p>
+                    <div class="input-group">
+                      <input type="password" class="form-control set-password" placeholder="new password" id="newPassword"/>
+                      <div class="input-group-append">
+                        <button class="btn btn-outline-secondary showHidePassword" type="button">Show</button>
+                        <button class="btn btn-outline-success" type="submit" disabled>Save</button>
+                      </div> <!-- .input-group-append -->
+                    </div> <!-- .input-group -->
+                  </div> <!-- .form-group -->
+                </form>
 
                 <form id="remoteKeyForm">
                   <div class="form-group">

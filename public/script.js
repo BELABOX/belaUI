@@ -32,7 +32,7 @@ function tryConnect() {
     showError("Disconnected from BELABOX. Trying to reconnect...");
     setTimeout(tryConnect, 1000);
 
-    $('.btn-netact').attr('disabled', true);
+    updateNetact(false);
   });
 
   c.addEventListener('open', function (event) {
@@ -40,7 +40,7 @@ function tryConnect() {
 
     hideError();
     tryTokenAuth();
-    $('.btn-netact').removeAttr('disabled');
+    updateNetact(true);
   });
 }
 
@@ -78,9 +78,10 @@ function handleAuthResult(msg) {
       localStorage.setItem('authToken', msg.auth_token);
     }
     $('#login').addClass('d-none');
+    $('#initialPasswordForm').addClass('d-none');
     $('#main').removeClass('d-none');
     hideError();
-  } else {
+  } else if (!isShowingInitialPasswordForm) {
     showLoginForm();
   }
 }
@@ -229,6 +230,10 @@ function updateStatus(status) {
 
   if (status.remote) {
     showRemoteStatus(status.remote);
+  }
+
+  if (status.set_password === true) {
+    showInitialPasswordForm();
   }
 }
 
@@ -459,29 +464,95 @@ document.getElementById("startStop").addEventListener("click", () => {
   }
 });
 
+function updateNetact(isActive) {
+  if (isActive) {
+    $('.btn-netact').attr('disabled', false);
+    checkRemoteKey();
+    $('.set-password').trigger('input');
+  } else {
+    $('.btn-netact').attr('disabled', true);
+  }
+}
+
+
 function showLoginForm() {
   $('#main').addClass('d-none');
+  $('#initialPasswordForm').addClass('d-none');
   $('#login').removeClass('d-none');
 }
 
-$('#login>form').submit(function() {
-  let auth_req = {auth: {
-                    password: $('#password').val(),
-                    persistent_token: $('#rememberMe').prop('checked')
-                 }};
-  $('#password').val('');
+function sendAuthMsg(password, isPersistent) {
+  let auth_req = {auth: {password, persistent_token: isPersistent}};
   ws.send(JSON.stringify(auth_req));
-  console.log();
+}
+
+$('#login>form').submit(function() {
+  const password = $('#password').val();
+  const rememberMe = $('#login .rememberMe').prop('checked');
+  sendAuthMsg(password, rememberMe);
+
+  $('#password').val('');
 
   return false;
 });
 
+let isShowingInitialPasswordForm = false;
+function showInitialPasswordForm() {
+  $('#main').addClass('d-none');
+  $('#login').addClass('d-none');
+  $('#initialPasswordForm').removeClass('d-none');
+  isShowingInitialPasswordForm = true;
+}
 
-$('#remoteDeviceKey').on('input', function() {
+function checkPassword() {
+  const form = $(this).parents('form');
+
+  const p = $(form).find('input[type=password]').val();
+  let isValid = false;
+
+  if (p.length < 8) {
+    $(form).find('.hint').text('Minimum length: 8 characters');
+  } else {
+    $(form).find('.hint').text('');
+    isValid = true;
+  }
+
+  $(form).find('button[type=submit]').prop('disabled', !isValid);
+}
+$('.set-password').on('input', checkPassword);
+
+function sendPasswordFromInput(form) {
+  const passwordInput = $(form).find('input[type=password]');
+  const password = passwordInput.val();
+
+  passwordInput.val('');
+  $(form).find('button[type=submit]').prop('disabled', true);
+
+  ws.send(JSON.stringify({config: {password}}));
+
+  return password;
+}
+
+$('#initialPasswordForm form').submit(function() {
+  const password = sendPasswordFromInput(this);
+  const remember = $(this).find('.rememberMe').prop('checked');
+  sendAuthMsg(password, remember);
+
+  return false;
+});
+
+$('form#updatePasswordForm').submit(function() {
+  sendPasswordFromInput(this);
+
+  return false;
+});
+
+function checkRemoteKey() {
   const remote_key = $('#remoteDeviceKey').val();
   const disabled = (remote_key == config.remote_key);
   $('#remoteKeyForm button[type=submit]').prop('disabled', disabled);
-});
+}
+$('#remoteDeviceKey').on('input', checkRemoteKey);
 
 $('#remoteKeyForm').submit(function() {
   const remote_key = $('#remoteDeviceKey').val();
