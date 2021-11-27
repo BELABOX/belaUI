@@ -77,7 +77,11 @@ function getRevision(cmd) {
 }
 
 const revisions = {};
-revisions['belaUI'] = getRevision('git rev-parse --short HEAD');
+try {
+  revisions['belaUI'] = fs.readFileSync('revision', 'utf8');
+} catch(err) {
+  revisions['belaUI'] = getRevision('git rev-parse --short HEAD');
+}
 revisions['belacoder'] = getRevision(`${belacoderExec} -v`);
 revisions['srtla'] = getRevision(`${srtlaSendExec} -v`);
 console.log(revisions);
