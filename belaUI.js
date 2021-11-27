@@ -38,8 +38,21 @@ const ACTIVE_TO = 15000;
 const setup = JSON.parse(fs.readFileSync(SETUP_FILE, 'utf8'));
 console.log(setup);
 
-const belacoderExec = setup.belacoder_path + '/belacoder';
-const srtlaSendExec = setup.srtla_path + '/srtla_send';
+let belacoderExec, belacoderPipelinesDir;
+if (setup.belacoder_path) {
+  belacoderExec = setup.belacoder_path + '/belacoder';
+  belacoderPipelinesDir = setup.belacoder_path + '/pipeline';
+} else {
+  belacoderExec = "/usr/bin/belacoder";
+  belacoderPipelinesDir = "/usr/share/belacoder/pipelines";
+}
+
+let srtlaSendExec;
+if (setup.srtla_path) {
+  srtlaSendExec = setup.srtla_path + '/srtla_send';
+} else {
+  srtlaSendExec = "/usr/bin/srtla_send";
+}
 
 function checkExecPath(path) {
   try {
@@ -179,9 +192,9 @@ function readDirAbsPath(dir) {
 function getPipelines() {
   const ps = {};
   if (setup['hw'] == 'jetson') {
-    Object.assign(ps, readDirAbsPath(setup['belacoder_path'] + '/pipeline/jetson/'));
+    Object.assign(ps, readDirAbsPath(belacoderPipelinesDir + '/jetson/'));
   }
-  Object.assign(ps, readDirAbsPath(setup['belacoder_path'] + '/pipeline/generic/'));
+  Object.assign(ps, readDirAbsPath(belacoderPipelinesDir + '/generic/'));
 
   return ps;
 }
