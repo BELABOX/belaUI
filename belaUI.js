@@ -82,9 +82,14 @@ revisions['belacoder'] = getRevision(`${belacoderExec} -v`);
 revisions['srtla'] = getRevision(`${srtlaSendExec} -v`);
 console.log(revisions);
 
-
-const config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-console.log(config);
+let config;
+try {
+  config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+  console.log(config);
+} catch (err) {
+  console.log(`Failed to open the config file: ${err.message}. Creating an empty config`);
+  config = {};
+}
 
 
 /* tempTokens stores temporary login tokens in memory,
