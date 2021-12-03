@@ -205,6 +205,77 @@ function showRemoteStatus(status) {
   $('#remoteStatus').removeClass('d-none');
 }
 
+
+/* Software updates */
+function showSoftwareUpdates(status) {
+  if (status) {
+    if (status.package_count) {
+      $('#softwareUpdate span.desc').text(`(${status.package_count} packages, ${status.download_size})`);
+    } else {
+      $('#softwareUpdate span.desc').text('(up to date)');
+    }
+    $('#softwareUpdate').attr('disabled', !status.package_count);
+  } else if (status === null) {
+    $('#softwareUpdate span.desc').text('(checking for updates...)');
+    $('#softwareUpdate').attr('disabled', true);
+  }
+  if (status === false) {
+     $('#softwareUpdate').addClass('d-none');
+  } else {
+    $('#softwareUpdate').removeClass('d-none');
+  }
+}
+
+function showSoftwareUpdateValue(cls, value, total) {
+  if (value > 0) {
+    $(`#softwareUpdateStatus .${cls} .value`).text(`${value} / ${total}`);
+    $(`#softwareUpdateStatus .${cls}`).removeClass('d-none');
+  } else {
+    $(`#softwareUpdateStatus .${cls}`).addClass('d-none');
+  }
+}
+
+function showSoftwareUpdateStatus(status) {
+  if (!status) {
+    $('#softwareUpdateStatus').addClass('d-none');
+    return;
+  }
+
+  $('#startStop, #softwareUpdate, .command-btn').attr('disabled', status.result === undefined);
+
+  showSoftwareUpdateValue('downloading', status.downloading, status.total);
+  showSoftwareUpdateValue('unpacking', status.unpacking, status.total);
+  showSoftwareUpdateValue('setting-up', status.setting_up, status.total);
+
+  if (status.result === 0) {
+    $('#softwareUpdateStatus p.result').text('Update completed. Restarting the encoder...');
+    $('#softwareUpdateStatus p.result').removeClass('text-danger');
+    $('#softwareUpdateStatus p.result').addClass('text-success');
+    $('#softwareUpdateStatus .result').removeClass('d-none');
+  } else if (status.result !== undefined) {
+    $('#softwareUpdateStatus p.result').text("Update error: " + status.result);
+    $('#softwareUpdateStatus p.result').removeClass('text-success');
+    $('#softwareUpdateStatus p.result').addClass('text-danger');
+    $('#softwareUpdateStatus .result').removeClass('d-none');
+  } else {
+    $('#softwareUpdateStatus .result').addClass('d-none');
+  }
+
+  $('#softwareUpdateStatus').removeClass('d-none');
+}
+
+$('#softwareUpdate').click(function() {
+  const msg = 'Are you sure you want to start a software update? ' +
+              'This may take several minutes. ' +
+              'You won\'t be able to start a stream until it\'s completed. ' +
+              'The encoder will briefly disconnect after a succesful upgrade. ' +
+              'Never remove power or reset the encoder while updating. If the encoder is powered from a battery, ensure it\'s fully charged.';
+
+  if (confirm(msg)) {
+    send_command('update');
+  }
+});
+
 /* status updates */
 function updateStatus(status) {
   if (status.is_streaming !== undefined) {
@@ -234,6 +305,14 @@ function updateStatus(status) {
 
   if (status.set_password === true) {
     showInitialPasswordForm();
+  }
+
+  if (status.available_updates !== undefined) {
+    showSoftwareUpdates(status.available_updates);
+  }
+
+  if (status.updating !== undefined) {
+    showSoftwareUpdateStatus(status.updating);
   }
 }
 
@@ -724,6 +803,7 @@ function updateNetact(isActive) {
     $('.btn-netact').attr('disabled', false);
     checkRemoteKey();
     $('.set-password').trigger('input');
+    showSoftwareUpdates(false);
   } else {
     $('.btn-netact').attr('disabled', true);
   }

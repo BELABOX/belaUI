@@ -34,6 +34,11 @@ const AUTH_TOKENS_FILE = 'auth_tokens.json';
 const BCRYPT_ROUNDS = 10;
 const ACTIVE_TO = 15000;
 
+/* Disable localization for any CLI commands we run */
+process.env['LANG'] = 'C';
+/* Make sure apt-get doesn't expect any interactive user input */
+process.env['DEBIAN_FRONTEND'] = 'noninteractive';
+
 /* Read the config and setup files */
 const setup = JSON.parse(fs.readFileSync(SETUP_FILE, 'utf8'));
 console.log(setup);
@@ -144,6 +149,9 @@ wss.on('connection', function connection(conn) {
 
 
 /* Misc helpers */
+const oneHour = 3600 * 1000;
+const oneDay = 24 * oneHour;
+
 function getms() {
   const [sec, ns] = process.hrtime();
   return sec * 1000 + Math.floor(ns / 1000 / 1000);
@@ -572,7 +580,7 @@ function handleWifiCommand(conn, type) {
 };
 
 /* Remote */
-const remoteProtocolVersion = 2;
+const remoteProtocolVersion = 3;
 const remoteEndpoint = 'wss://remote.belabox.net/ws/remote';
 const remoteTimeout = 5000;
 const remoteConnectTimeout = 10000;
@@ -866,6 +874,11 @@ function spawnStreamingLoop(command, args, cooldown = 100) {
 }
 
 function start(conn, params) {
+  if (isStreaming || isUpdating()) {
+    sendStatus(conn);
+    return;
+  }
+
   const senderId = conn.senderId;
   updateConfig(conn, params, function(pipeline) {
     if (genSrtlaIpList() < 1) {
@@ -909,12 +922,20 @@ stop(); // make sure we didn't inherit an orphan runner process
 
 /* Misc commands */
 function command(conn, cmd) {
+  if (isStreaming || isUpdating()) {
+    sendStatus(conn);
+    return;
+  }
+
   switch(cmd) {
     case 'poweroff':
       spawnSync("poweroff", {detached: true});
       break;
     case 'reboot':
       spawnSync("reboot", {detached: true});
+      break;
+    case 'update':
+      doSoftwareUpdate();
       break;
   }
 }
@@ -938,6 +959,157 @@ function handleConfig(conn, msg, isRemote) {
         break;
     }
   }
+}
+
+
+/* Software updates */
+let availableUpdates = setup.apt_update_enabled ? null : false;
+let softUpdateStatus = null;
+let lastAptUpdate;
+
+function isUpdating() {
+  return (softUpdateStatus != null);
+}
+
+function parseUpgradePackageCount(text) {
+  try {
+    const upgradedCount = parseInt(text.match(/(\d+) upgraded/)[1]);
+    const newlyInstalledCount = parseInt(text.match(/, (\d+) newly installed/)[1]);
+    const upgradeCount = upgradedCount + newlyInstalledCount;
+    return upgradeCount;
+  } catch(err) {
+    return undefined;
+  }
+}
+
+function parseUpgradeDownloadSize(text) {
+  try {
+    let downloadSize = text.split('Need to get ')[1];
+    downloadSize = downloadSize.split(/\/|( of archives)/)[0];
+    return downloadSize;
+  } catch(err) {
+    return undefined;
+  }
+}
+
+function getSoftwareUpdateSize() {
+  if (isStreaming || isUpdating()) return;
+
+  exec("apt-get dist-upgrade --assume-no", function(err, stdout, stderr) {
+    console.log(stdout);
+    console.log(stderr);
+
+    /*
+    // Currently unused, may do some filtering in the future
+    let packageList = stdout.split("The following packages will be upgraded:\n")[1];
+    packageList = packageList.split(/\n\d+/)[0];
+    packageList = packageList.replace(/[\n ]+/g, ' ');
+    packageList = packageList.trim();
+    */
+
+    const upgradeCount = parseUpgradePackageCount(stdout);
+    let downloadSize;
+    if (upgradeCount > 0) {
+      downloadSize = parseUpgradeDownloadSize(stdout);
+    }
+    availableUpdates = {package_count: upgradeCount, download_size: downloadSize};
+    broadcastMsg('status', {available_updates: availableUpdates});
+  });
+}
+
+function checkForSoftwareUpdates() {
+  if (isStreaming || isUpdating()) return;
+
+  if (lastAptUpdate && (lastAptUpdate + oneDay) < getms()) return;
+
+  exec("apt-get update --allow-releaseinfo-change", function(err, stdout, stderr) {
+    console.log(`apt-get update: ${(err === null) ? 'success' : 'error'}`);
+    console.log(stdout);
+    console.log(stderr);
+
+    if (err === null) {
+      lastAptUpdate = getms();
+      getSoftwareUpdateSize();
+    } else {
+      setTimeout(checkForSoftwareUpdates, oneHour);
+    }
+  });
+}
+if (setup.apt_update_enabled) {
+  checkForSoftwareUpdates();
+  setInterval(checkForSoftwareUpdates, oneHour);
+}
+
+function doSoftwareUpdate() {
+  if (!setup.apt_update_enabled || isStreaming || isUpdating()) return;
+
+  let aptLog = '';
+  let aptErr = '';
+  softUpdateStatus = {downloading: 0, unpacking: 0, setting_up: 0, total: 0};
+
+  broadcastMsg('status', {updating: softUpdateStatus});
+
+  const args = "-y -o \"Dpkg::Options::=--force-confdef\" -o \"Dpkg::Options::=--force-confold\" dist-upgrade".split(' ');
+  const aptUpgrade = spawn("apt-get", args);
+
+  aptUpgrade.stdout.on('data', function(data) {
+    let sendUpdate = false;
+
+    data = data.toString('utf8');
+    aptLog += data;
+    if (softUpdateStatus.total == 0) {
+      let count = parseUpgradePackageCount(data);
+      if (count !== undefined) {
+        softUpdateStatus.total = count;
+        sendUpdate = true;
+      }
+    }
+
+    if (softUpdateStatus.downloading != softUpdateStatus.total) {
+      const getMatch = data.match(/Get:(\d+)/);
+      if (getMatch) {
+        const i = parseInt(getMatch[1]);
+        if (i > softUpdateStatus.downloading) {
+          softUpdateStatus.downloading = Math.min(i, softUpdateStatus.total);
+          sendUpdate = true;
+        }
+      }
+    }
+
+    const unpacking = data.match(/Unpacking /g);
+    if (unpacking) {
+      softUpdateStatus.downloading = softUpdateStatus.total;
+      softUpdateStatus.unpacking += unpacking.length;
+      softUpdateStatus.unpacking = Math.min(softUpdateStatus.unpacking, softUpdateStatus.total);
+      sendUpdate = true;
+    }
+
+    const setting_up = data.match(/Setting up /g);
+    if (setting_up) {
+      softUpdateStatus.setting_up += setting_up.length;
+      softUpdateStatus.setting_up = Math.min(softUpdateStatus.setting_up, softUpdateStatus.total);
+      sendUpdate = true;
+    }
+
+    if (sendUpdate) {
+      broadcastMsg('status', {updating: softUpdateStatus});
+    }
+  });
+
+  aptUpgrade.stderr.on('data', function(data) {
+    aptErr += data;
+  });
+
+  aptUpgrade.on('close', function(code) {
+    softUpdateStatus.result = (code == 0) ? code : aptErr;
+    broadcastMsg('status', {updating: softUpdateStatus});
+
+    softUpdateStatus = null;
+    console.log(aptLog);
+    console.log(aptErr);
+
+    if (code == 0) process.exit(0);
+  });
 }
 
 
@@ -966,10 +1138,16 @@ function genAuthToken(isPersistent) {
   return token;
 }
 
+function sendStatus(conn) {
+  conn.send(buildMsg('status', {is_streaming: isStreaming,
+                                available_updates: availableUpdates,
+                                updating: softUpdateStatus}));
+}
+
 function sendInitialStatus(conn) {
   conn.send(buildMsg('config', config));
   conn.send(buildMsg('pipelines', getPipelineList()));
-  conn.send(buildMsg('status', {is_streaming: isStreaming}));
+  sendStatus(conn);
   conn.send(buildMsg('netif', netif));
   conn.send(buildMsg('sensors', sensors));
   conn.send(buildMsg('revisions', revisions));

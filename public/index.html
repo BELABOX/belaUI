@@ -40,6 +40,20 @@
       <div class="alert d-none" role="alert" id="remoteStatus">
       </div>
 
+      <div class="alert alert-warning alert-dismissible fade show d-none" role="alert" id="softwareUpdateStatus">
+        <p class="m-0"><b>Software update in progress</b></p>
+        <p class="m-0">The encoder will briefly disconnect after a succesful update</p>
+        <p class="m-0">Never remove power or reset the encoder while updating</p>
+        <p class="m-0">Preparing update...</p>
+        <p class="downloading m-0 d-none">Downloading: <span class="value"></span></p>
+        <p class="unpacking m-0 d-none">Unpacking: <span class="value"></span></p>
+        <p class="setting-up m-0 d-none">Setting up: <span class="value"></span></p>
+        <p class="result font-weight-bold m-0"></p>
+        <button type="button" class="close result d-none" data-dismiss="alert" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+
       <div id="login" class="container card mt-4 p-2 d-none">
         <form>
           <input type="password" id="password" class="form-control input_user" placeholder="password">
@@ -223,6 +237,10 @@
                     </div> <!-- .input-group -->
                   </div> <!-- .form-group -->
                 </form>
+
+                <button type="button" id="softwareUpdate" class="btn btn-block btn-primary btn-netact d-none" disabled>
+                  Software update <span class="desc"></span>
+                </button>
 
                 <button type="button" id="logout" class="btn btn-block btn-warning btn-netact">
                   Logout
