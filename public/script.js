@@ -276,6 +276,39 @@ $('#softwareUpdate').click(function() {
   }
 });
 
+
+/* SSH status / control */
+let sshStatus;
+function showSshStatus(s) {
+  if (s !== undefined) {
+    sshStatus = s;
+  }
+
+  if (!sshStatus) return;
+
+  const pass = !config.ssh_pass ? 'password not set' : (sshStatus.user_pass ? 'user-set password' : config.ssh_pass)
+  $('label[for=sshPassword]').text(`SSH password (username: ${sshStatus.user})`);
+
+  $('#sshPassword').val(pass);
+  if (sshStatus.active) {
+    $('#startSsh').addClass('d-none');
+    $('#stopSsh').removeClass('d-none');
+  } else {
+    $('#stopSsh').addClass('d-none');
+    $('#startSsh').removeClass('d-none');
+  }
+  $('#advancedSettings').removeClass('d-none');
+}
+
+$('#resetSshPass').click(function() {
+  const msg = 'Are you sure you want to reset the SSH password?';
+
+  if (confirm(msg)) {
+    send_command('reset_ssh_pass');
+  }
+});
+
+
 /* status updates */
 function updateStatus(status) {
   if (status.is_streaming !== undefined) {
@@ -314,6 +347,10 @@ function updateStatus(status) {
   if (status.updating !== undefined) {
     showSoftwareUpdateStatus(status.updating);
   }
+
+  if (status.ssh) {
+    showSshStatus(status.ssh);
+  }
 }
 
 
@@ -332,6 +369,10 @@ function loadConfig(c) {
 
   $('#remoteDeviceKey').val(config.remote_key);
   $('#remoteKeyForm button[type=submit]').prop('disabled', true);
+
+  if (config.ssh_pass && sshStatus) {
+    showSshStatus();
+  }
 }
 
 
@@ -902,7 +943,9 @@ $('#logout').click(function() {
 });
 
 $('.command-btn').click(function() {
-  send_command(this.id);
+  // convert to snake case
+  const cmd = this.id.split(/(?=[A-Z])/).join('_').toLowerCase();
+  send_command(cmd);
 });
 
 $('button.showHidePassword').click(function() {
@@ -913,5 +956,51 @@ $('button.showHidePassword').click(function() {
   } else {
     inputField.attr('type', 'password');
     $(this).text('Show');
+  }
+});
+
+/* Input fields automatically copied to clipboard when clicked */
+function copyInputValToClipboard(obj) {
+  if (!document.queryCommandSupported || !document.queryCommandSupported("copy")) {
+    return false;
+  }
+
+  let input = $(obj);
+  let valField = input;
+
+  valField = $('<input>');
+  valField.css('position', 'fixed');
+  valField.css('top', '100000px');
+  valField.val(input.val());
+  $('body').append(valField);
+
+  let success = false;
+  try {
+    valField.select();
+    document.execCommand("copy");
+    success = true;
+  } catch (err) {
+    console.log("Copying failed: " + err.message);
+  }
+
+  valField.remove();
+
+  return success;
+}
+
+$('input.click-copy').tooltip({title: 'Copied', trigger: 'manual'});
+$('input.click-copy').click(function(ev) {
+  const target = ev.target;
+  let input = $(ev.target);
+
+  if (copyInputValToClipboard(target)) {
+    input.tooltip('show');
+    if (target.copiedTooltipTimer) {
+      clearTimeout(target.copiedTooltipTimer);
+    }
+    target.copiedTooltipTimer = setTimeout(function() {
+      input.tooltip('hide');
+      delete target.copiedTooltipTimer;
+    }, 3000);
   }
 });

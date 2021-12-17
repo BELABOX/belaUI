@@ -195,6 +195,40 @@
             </div> <!-- .collapse -->
           </div> <!-- .card -->
 
+          <div class="card mb-2 d-none" id="advancedSettings">
+            <div class="card-header bg-success text-center" type="button"
+                 data-toggle="collapse" data-target="#collapseFour">
+              <button class="btn btn-link text-white" type="button" data-toggle="collapse"
+                      data-target="#collapseFour" aria-expanded="false" aria-controls="collapseFour">
+                Advanced / developer settings
+              </button>
+            </div> <!-- card-header -->
+
+            <div class="collapse" id="collapseFour">
+              <div class="card-body">
+
+                <div class="form-group">
+                  <label for="sshPassword">SSH login</label>
+                  <div class="input-group">
+                    <input type="password" class="form-control click-copy" id="sshPassword" readonly/>
+                    <div class="input-group-append">
+                      <button class="btn btn-outline-secondary showHidePassword" type="button">Show</button>
+                      <button class="btn btn-outline-danger btn-netact" id="resetSshPass" type="button">Reset</button>
+                    </div>
+                  </div>
+                </div>
+
+                <button type="button" id="startSsh" class="btn btn-block btn-success command-btn btn-netact d-none">
+                  Start SSH server
+                </button>
+                <button type="button" id="stopSsh" class="btn btn-block btn-danger command-btn btn-netact d-none">
+                  Stop SSH server
+                </button>
+
+              </div> <!-- .card-body -->
+            </div> <!-- .collapse -->
+          </div> <!-- .card -->
+
           <div class="card mb-2">
             <div class="card-header bg-success text-center" type="button"
                  data-toggle="collapse" data-target="#collapseThree">

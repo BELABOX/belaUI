@@ -92,9 +92,12 @@ revisions['srtla'] = getRevision(`${srtlaSendExec} -v`);
 console.log(revisions);
 
 let config;
+let sshPasswordHash;
 try {
   config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
   console.log(config);
+  sshPasswordHash = config.ssh_pass_hash;
+  delete config.ssh_pass_hash;
 } catch (err) {
   console.log(`Failed to open the config file: ${err.message}. Creating an empty config`);
   config = {};
@@ -112,7 +115,10 @@ try {
 }
 
 function saveConfig() {
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(config));
+  config.ssh_pass_hash = sshPasswordHash;
+  const c = JSON.stringify(config);
+  delete config.ssh_pass_hash;
+  fs.writeFileSync(CONFIG_FILE, c);
 }
 
 function savePersistentTokens() {
@@ -580,7 +586,7 @@ function handleWifiCommand(conn, type) {
 };
 
 /* Remote */
-const remoteProtocolVersion = 3;
+const remoteProtocolVersion = 4;
 const remoteEndpoint = 'wss://remote.belabox.net/ws/remote';
 const remoteTimeout = 5000;
 const remoteConnectTimeout = 10000;
@@ -937,6 +943,13 @@ function command(conn, cmd) {
     case 'update':
       doSoftwareUpdate();
       break;
+    case 'start_ssh':
+    case 'stop_ssh':
+      startStopSsh(conn, cmd);
+      break;
+    case 'reset_ssh_pass':
+      resetSshPassword(conn);
+      break;
   }
 }
 
@@ -1113,6 +1126,103 @@ function doSoftwareUpdate() {
 }
 
 
+/* SSH control */
+let sshStatus;
+function handleSshStatus(s) {
+  if (s.user !== undefined && s.active !== undefined && s.user_pass !== undefined) {
+    if (!sshStatus ||
+        s.user != sshStatus.user ||
+        s.active != sshStatus.active ||
+        s.user_pass != sshStatus.user_pass) {
+      sshStatus = s;
+      broadcastMsg('status', {ssh: sshStatus});
+    }
+  }
+}
+
+function getSshUserHash(callback) {
+  if (!setup.ssh_user) return;
+
+  const cmd = `grep "^${setup.ssh_user}:" /etc/shadow`;
+  exec(cmd, function(err, stdout, stderr) {
+    if (err === null && stdout.length) {
+      callback(stdout);
+    } else {
+      console.log(`Error getting the password hash for ${setup.ssh_user}: ${err}`);
+    }
+  });
+}
+
+function getSshStatus(conn) {
+  if (!setup.ssh_user) return undefined;
+
+  let s = {};
+  s.user = setup.ssh_user;
+
+  // Check is the SSH server is running
+  exec('systemctl is-active ssh', function(err, stdout, stderr) {
+    if (err === null) {
+      s.active = true;
+    } else {
+      if (stdout == "inactive\n") {
+        s.active = false;
+      } else {
+        console.log('Error running systemctl is-active ssh: ' + err.message);
+        return;
+      }
+    }
+
+    handleSshStatus(s);
+  });
+
+  // Check if the user's password has been changed
+  getSshUserHash(function(hash) {
+    s.user_pass = (hash != sshPasswordHash);
+    handleSshStatus(s);
+  });
+
+  // If an immediate result is expected, send the cached status
+  return sshStatus;
+}
+getSshStatus();
+
+function startStopSsh(conn, cmd) {
+  if (!setup.ssh_user) return;
+
+  switch(cmd) {
+    case 'start_ssh':
+      if (config.ssh_pass === undefined) {
+        resetSshPassword(conn);
+      }
+    case 'stop_ssh':
+      const action = cmd.split('_')[0];
+      spawnSync('systemctl', [action, 'ssh'], {detached: true});
+      getSshStatus();
+      break;
+  }
+}
+
+function resetSshPassword(conn) {
+  if (!setup.ssh_user) return;
+
+  const password = crypto.randomBytes(24).toString('base64').
+                   replace(/\+|\/|=/g, '').substring(0,20);
+  const cmd = `printf "${password}\n${password}" | passwd ${setup.ssh_user}`;
+  exec(cmd, function(err, stdout, stderr) {
+    if (err) {
+      sendError(conn, `Failed to reset the SSH password for ${setup.ssh_user}`);
+      return;
+    }
+    getSshUserHash(function(hash) {
+      config.ssh_pass = password;
+      sshPasswordHash = hash;
+      saveConfig();
+      broadcastMsg('config', config);
+      getSshStatus();
+    });
+  });
+}
+
 /* Authentication */
 function setPassword(conn, password, isRemote) {
   if (conn.isAuthed || (!isRemote && !config.password_hash)) {
@@ -1141,7 +1251,8 @@ function genAuthToken(isPersistent) {
 function sendStatus(conn) {
   conn.send(buildMsg('status', {is_streaming: isStreaming,
                                 available_updates: availableUpdates,
-                                updating: softUpdateStatus}));
+                                updating: softUpdateStatus,
+                                ssh: getSshStatus(conn)}));
 }
 
 function sendInitialStatus(conn) {
