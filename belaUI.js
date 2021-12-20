@@ -89,6 +89,10 @@ try {
 }
 revisions['belacoder'] = getRevision(`${belacoderExec} -v`);
 revisions['srtla'] = getRevision(`${srtlaSendExec} -v`);
+// Only show a BELABOX image version if it exists
+try {
+  revisions['BELABOX image'] = fs.readFileSync('/etc/belabox_img_version', 'utf8').trim();
+} catch(err) {};
 console.log(revisions);
 
 let config;
