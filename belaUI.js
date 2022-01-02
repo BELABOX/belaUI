@@ -240,8 +240,14 @@ function updateNetif() {
     const interfaces = stdout.split("\n\n");
     for (const int of interfaces) {
       try {
-        const name = int.split(':')[0]
-        if (name == 'lo' || name.match('^docker') || name.match('^l4tbr')) continue;
+        const [name, rest] = int.split(":");
+        if (
+          name == "lo" ||
+          name.match("^docker") ||
+          name.match("^l4tbr") ||
+          (name == "eth0" && !rest.includes("RUNNING"))
+        )
+          continue;
 
         let inetAddr = int.match(/inet \d+\.\d+\.\d+\.\d+/);
         if (inetAddr == null) continue;
