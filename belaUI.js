@@ -461,12 +461,12 @@ function disconnectWifiDevice(device) {
       device,
     ]).toString("utf-8");
 
-    refreshWifiNetworks();
     console.log("[Wifi]", disconnect);
   } catch ({ message }) {
-    refreshWifiNetworks();
     console.log("[Wifi]", message);
   }
+
+  refreshWifiNetworks();
 }
 
 function deleteKnownConnection(uuid) {
@@ -478,12 +478,12 @@ function deleteKnownConnection(uuid) {
       uuid,
     ]).toString("utf-8");
 
-    refreshWifiNetworks();
     console.log("[Wifi]", deleteCon);
   } catch ({ message }) {
-    refreshWifiNetworks();
     console.log("[Wifi]", message);
   }
+
+  refreshWifiNetworks();
 }
 
 function connectToNewNetwork(device, ssid, password) {
@@ -521,12 +521,12 @@ function connectToNewNetwork(device, ssid, password) {
       ]);
     }
 
-    refreshWifiNetworks();
     console.log("[Wifi]", connect);
   } catch ({ message }) {
-    refreshWifiNetworks();
     console.log("[Wifi]", message);
   }
+
+  refreshWifiNetworks();
 }
 
 function connectToKnownNetwork(uuid) {
@@ -537,12 +537,12 @@ function connectToKnownNetwork(uuid) {
       uuid
     ]).toString("utf-8");
 
-    refreshWifiNetworks();
     console.log("[Wifi]", connect);
   } catch ({ message }) {
-    refreshWifiNetworks();
     console.log("[Wifi]", message);
   }
+
+  refreshWifiNetworks();
 }
 
 function handleWifiCommand(conn, type) {
