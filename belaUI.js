@@ -19,7 +19,7 @@ const http = require('http');
 const finalhandler = require('finalhandler');
 const serveStatic = require('serve-static');
 const ws = require('ws');
-const { exec, execSync, spawn, spawnSync } = require("child_process");
+const { exec, execSync, spawn, spawnSync, execFileSync } = require("child_process");
 const fs = require('fs')
 const crypto = require('crypto');
 const path = require('path');
@@ -303,6 +303,275 @@ function handleNetif(conn, msg) {
   conn.send(buildMsg('netif', netif));
 }
 
+/* Wifi */
+function getKnownWifiConnections() {
+  try {
+    const connections = execFileSync("nmcli", [
+      "--terse",
+      "--fields",
+      "uuid,type",
+      "connection",
+      "show",
+    ])
+      .toString("utf-8")
+      .split("\n");
+
+    const knownNetworks = {};
+
+    for (const connection of connections) {
+      const [uuid, type] = connection.split(":");
+
+      if (type !== "802-11-wireless") continue;
+
+      // Get the device the connection is bound to and the real ssid, since the connection name is prefixed.
+      const connectionInfo = execFileSync("nmcli", [
+        "--terse",
+        "--fields",
+        "connection.interface-name, 802-11-wireless.ssid",
+        "connection",
+        "show",
+        uuid,
+      ])
+        .toString("utf-8")
+        .split("\n")
+        .map((con) => {
+          return con.split(":")[1];
+        });
+
+      const [device, ssid] = connectionInfo;
+
+      if (device == "") continue;
+
+      if (!knownNetworks[device]) knownNetworks[device] = [];
+
+      knownNetworks[device].push({
+        uuid,
+        ssid,
+      });
+    }
+
+    return knownNetworks;
+  } catch ({ message }) {
+    console.log(message);
+    return [];
+  }
+}
+
+function getStatusWifiDevices() {
+  try {
+    const networkDevices = execFileSync("nmcli", [
+      "--terse",
+      "--fields",
+      "type,device,state,con-uuid",
+      "device",
+      "status",
+    ])
+      .toString("utf-8")
+      .split("\n");
+
+    const statusWifiDevices = {};
+
+    for (const networkDevice of networkDevices) {
+      const [type, device, state, uuid] = networkDevice.split(":");
+
+      if (type !== "wifi" || state == "unavailable") continue;
+
+      statusWifiDevices[device] = {
+        state,
+        uuid,
+        ssid: ""
+      };
+
+      if (!uuid) continue;
+
+      const connectionInfo = execFileSync("nmcli", [
+        "--terse",
+        "--fields",
+        "802-11-wireless.ssid",
+        "connection",
+        "show",
+        uuid,
+      ])
+        .toString("utf-8")
+        .split("\n");
+
+        statusWifiDevices[device].ssid = connectionInfo[0].split(":")[1];
+    }
+
+    return statusWifiDevices;
+  } catch ({ message }) {
+    console.log(message);
+    return {};
+  }
+}
+
+function getAvailableWifiNetworks() {
+  try {
+    const wifiNetworks = execFileSync("nmcli", [
+      "--terse",
+      "--fields",
+      "active,ssid,signal,bars,security,freq,bssid,device",
+      "device",
+      "wifi",
+    ])
+      .toString("utf-8")
+      .split("\n");
+
+    const sortedWifiNetworks = {};
+
+    for (const wifiNetwork of wifiNetworks) {
+      const [active, ssid, signal, bars, security, freq, bssid, device] =
+        wifiNetwork.replace(/\\:/g, "&&").split(":");
+
+      if (ssid == "" || ssid == null || signal < 40) continue;
+
+      if (!sortedWifiNetworks[device]) sortedWifiNetworks[device] = [];
+
+      sortedWifiNetworks[device].push({
+        active: active === "yes" ? true : false,
+        ssid,
+        signal: parseInt(signal),
+        bars,
+        security,
+        freq: parseInt(freq),
+        bssid: bssid.replace(/\&&/g, ":"),
+      });
+    }
+
+    return sortedWifiNetworks;
+  } catch ({ message }) {
+    console.log(message);
+    return {};
+  }
+}
+
+function refreshWifiNetworks() {
+  broadcastMsg("wifidevices", getStatusWifiDevices());
+  broadcastMsg("wifinetworks", {
+    knownWifiConnections: getKnownWifiConnections(),
+    availableWifiNetworks: getAvailableWifiNetworks()
+  });
+}
+
+function disconnectWifiDevice(device) {
+  try {
+    const disconnect = execFileSync("nmcli", [
+      "device",
+      "disconnect",
+      device,
+    ]).toString("utf-8");
+
+    console.log("[Wifi]", disconnect);
+  } catch ({ message }) {
+    console.log("[Wifi]", message);
+  }
+
+  refreshWifiNetworks();
+}
+
+function deleteKnownConnection(uuid) {
+  try {
+    const deleteCon = execFileSync("nmcli", [
+      "connection",
+      "delete",
+      "uuid",
+      uuid,
+    ]).toString("utf-8");
+
+    console.log("[Wifi]", deleteCon);
+  } catch ({ message }) {
+    console.log("[Wifi]", message);
+  }
+
+  refreshWifiNetworks();
+}
+
+function connectToNewNetwork(device, ssid, password) {
+  const args = [
+    "-w",
+    "15",
+    "device",
+    "wifi",
+    "connect",
+    ssid,
+    "ifname",
+    device
+  ]
+
+  if (password) {
+    args.push('password');
+    args.push(password);
+  }
+
+  try {
+    const connect = execFileSync("nmcli", args).toString("utf-8");
+
+    // Manually add device to connectino since it is not done automatically
+    const match = connect.match(
+      /[a-f0-9]{8}\-[a-f0-9]{4}\-[a-f0-9]{4}\-[a-f0-9]{4}\-[a-f0-9]{12}/g
+    );
+
+    if (match) {
+      execFileSync("nmcli", [
+        "connection",
+        "modify",
+        match[0],
+        "connection.interface-name",
+        device,
+      ]);
+    }
+
+    console.log("[Wifi]", connect);
+  } catch ({ message }) {
+    console.log("[Wifi]", message);
+  }
+
+  refreshWifiNetworks();
+}
+
+function connectToKnownNetwork(uuid) {
+  try {
+    const connect = execFileSync("nmcli", [
+      "connection",
+      "up",
+      uuid
+    ]).toString("utf-8");
+
+    console.log("[Wifi]", connect);
+  } catch ({ message }) {
+    console.log("[Wifi]", message);
+  }
+
+  refreshWifiNetworks();
+}
+
+function handleWifiCommand(conn, type) {
+  switch (type.command) {
+
+    case "connectToNewNetwork":
+      connectToNewNetwork(type.device, type.ssid, type.password);
+      break;
+
+    case "connectToOpenNetwork":
+      connectToNewNetwork(type.device, type.ssid);
+      break;
+
+    case "connectToKnownNetwork":
+      connectToKnownNetwork(type.uuid);
+      break;
+    
+    case "refreshNetworks":
+      refreshWifiNetworks();
+      break;
+    case "disconnectWifiDevice":
+      disconnectWifiDevice(type.device);
+      break;     
+    case "deleteKnownConnection":
+      deleteKnownConnection(type.uuid)
+      break;
+  };
+};
+
 /* Remote */
 const remoteProtocolVersion = 2;
 const remoteEndpoint = 'wss://remote.belabox.net/ws/remote';
@@ -395,7 +664,7 @@ function remoteConnect() {
     console.log(`remote: trying to connect via ${bindIp}`);
 
     remoteStatusHandled = false;
-    remoteWs = new ws(remoteEndpoint, options = {localAddress: bindIp});
+    remoteWs = new ws(remoteEndpoint, (options = {localAddress: bindIp}));
     remoteWs.isAuthed = false;
     // Set a longer initial connection timeout - mostly to deal with slow DNS
     remoteWs.lastActive = getms() + remoteConnectTimeout - remoteTimeout;
@@ -705,6 +974,7 @@ function sendInitialStatus(conn) {
   conn.send(buildMsg('netif', netif));
   conn.send(buildMsg('sensors', sensors));
   conn.send(buildMsg('revisions', revisions));
+  conn.send(buildMsg('wifidevices', getStatusWifiDevices()));
 }
 
 function connAuth(conn, sendToken) {
@@ -789,6 +1059,9 @@ function handleMessage(conn, msg, isRemote = false) {
       case 'netif':
         handleNetif(conn, msg[type]);
         break;
+      case 'wifiCommand':
+        handleWifiCommand(conn, msg[type]);
+        break;
       case 'logout':
         if (conn.authToken) {
           delete tempTokens[conn.authToken];
@@ -807,5 +1080,4 @@ function handleMessage(conn, msg, isRemote = false) {
   conn.lastActive = getms();
 }
 
-server.listen(80);
-
+server.listen(process.env.PORT || 80);
