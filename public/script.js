@@ -324,7 +324,8 @@ function connectToNetworkHandler(dataset) {
     ws.send(JSON.stringify({ 
       wifiCommand: {
         command: "connectToOpenNetwork",
-        ssid: dataset.ssid
+        ssid: dataset.ssid,
+        device: dataset.device
       },
     }));
   } else {
