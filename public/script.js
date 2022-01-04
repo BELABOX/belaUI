@@ -284,6 +284,251 @@ function updateBitrate(br) {
   showBitrate(br.max_br);
 }
 
+/* Wifi Settings */
+const wifiElement = document.querySelector("#wifi");
+
+// Function to request a refresh of the wifi networks
+function refreshWifiNetworks() {
+  if (!ws) return;
+  ws.send(JSON.stringify({ 
+    wifiCommand: {
+      command: "refreshNetworks",
+    }
+  }));
+
+  // Disable buttons and add a loading spinner
+  document.querySelectorAll(".refreshbutton").forEach((button) => button.disabled = true);
+  document.querySelectorAll(".networks").forEach((network) => network.innerHTML = `
+    <tr>
+      <td>
+        <div class="text-center">
+          <div class="spinner-border" role="status">
+            <span class="sr-only">Loading...</span>
+          </div>
+        </div>
+      </td>
+    </tr>
+  `);
+  document.querySelectorAll(".knownNetworks").forEach((network) => network.innerHTML = "");
+};
+
+function connectToNetworkHandler(dataset) {
+  if (dataset.uuid) {
+    ws.send(JSON.stringify({ 
+      wifiCommand: {
+        command: "connectToKnownNetwork",
+        uuid: dataset.uuid
+      },
+    }));
+  } else if (dataset.security === "") {
+    ws.send(JSON.stringify({ 
+      wifiCommand: {
+        command: "connectToOpenNetwork",
+        ssid: dataset.ssid
+      },
+    }));
+  } else {
+    $('#wifiModal').find('#wifiModalTitle').text("Connect to network");
+    $('#wifiModal').find('#wifiModalBody').html(`
+      <form>
+        <div class="form-group">
+          <label for="connection-ssid" class="col-form-label">SSID</label>
+          <input type="text" class="form-control" id="connection-ssid" value="${dataset.ssid}" readonly>
+        </div>
+        <div class="form-group">
+          <label for="connection-password" class="col-form-label">Password</label>
+          <input type="password" class="form-control" id="connection-password">
+        </div>
+      </form>
+    `);
+    $('#wifiModal').find('#wifiModalFooter').html(`
+      <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+      <button type="button" class="btn btn-success" data-dismiss="modal" onClick="connectToNetworkWithPW('${dataset.device}', '${dataset.ssid}')">Connect</button>
+    `);
+  
+    $('#wifiModal').modal({ show: true });
+  }
+}
+
+function connectToNetworkWithPW(device, ssid) {
+  const password = $('#connection-password').val();
+
+  ws.send(JSON.stringify({ 
+    wifiCommand: {
+      command: "connectToNewNetwork",
+      device,
+      ssid,
+      password
+    },
+  }));
+}
+
+function deleteKnownConnectionHandler(dataset) {
+  $('#wifiModal').find('#wifiModalTitle').text("Delete connection?");
+  $('#wifiModal').find('#wifiModalBody').html(`
+    <form>
+      <div class="form-group">
+        <label for="connection-name" class="col-form-label">Connection:</label>
+        <input type="text" class="form-control" id="connection-name" value="${dataset.ssid}" readonly>
+      </div>
+    </form>
+  `);
+  $('#wifiModal').find('#wifiModalFooter').html(`
+    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+    <button  type="button" class="btn btn-danger" data-dismiss="modal" onClick="deleteKnownConnection('${dataset.uuid}')">Delete</button>
+  `);
+
+  $('#wifiModal').modal({ show: true });
+}
+
+function deleteKnownConnection(uuid) {
+  ws.send(JSON.stringify({ 
+    wifiCommand: {
+      command: "deleteKnownConnection",
+      uuid
+    },
+  }));
+}
+
+function disconnectWifiDevice(device) {
+  ws.send(JSON.stringify({ 
+    wifiCommand: {
+      command: "disconnectWifiDevice",
+      device
+    },
+  }));
+}
+
+// Update wifi devices based on new status
+function updateWifiDevices(status) {
+  const devices = Object.keys(status);
+
+  devices.forEach((device) => {
+    // If wifi device is not yet on the page, add it.
+    if (document.querySelector(`#${device}`) == null) {
+      const html = `
+        <div id="${device}" class="wifi-settings card mb-2">
+          <div class="card-header bg-success text-center" type="button" data-toggle="collapse" data-target="#collapseWifi-${device}">
+            <button class="btn btn-link text-white" type="button" data-toggle="collapse" data-target="#collapseWifi-${device}" aria-expanded="false" aria-controls="collapseWifi-${device}">
+              Wifi settings: <strong>${device}</strong>
+            </button>
+          </div>
+
+          <div class="collapse" id="collapseWifi-${device}">
+            <div class="card-body">
+
+              <label for="connection-${device}">Current connection</label>
+              <div class="input-group mb-2">
+                <input type="text" id="connection-${device}" class="form-control text-center" value="----" readonly>
+                <div id="conButtons-${device}" class="input-group-append"></div>
+              </div>
+
+              <hr class="mb-4">
+
+              <button type="button" id="refreshNetworks-${device}" class="btn btn-block btn-warning btn-netact mb-2 refreshbutton" onClick="refreshWifiNetworks()">
+                Scan Wifi List
+              </button>
+
+              <div class="mb-3 text-secondary text-center small lastRefresh"></div>
+
+              <table class="table mb-2">
+                <tbody id="wifiNetworks-${device}" class="networks"></tbody>
+              </table>
+
+              <table class="table mb-0">
+                <tbody id="knownWifiNetworks-${device}" class="knownNetworks"></tbody>
+              </table>
+  
+            </div>
+          </div>
+        </div>
+      `
+
+      wifiElement.insertAdjacentHTML('beforeend', html);
+    };
+
+    // Set values for current connection
+    document.getElementById(`connection-${device}`).value = status[device].ssid ? status[device].ssid : "----";
+
+    // Add / Remove buttons for current connection
+    const conButtons = document.getElementById(`conButtons-${device}`);
+    conButtons.innerHTML = status[device].ssid ? `
+      <button class="btn btn-secondary px-4" type="button" data-device="${device}" onClick="disconnectWifiDevice(this.dataset.device)">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-wifi-off" viewBox="0 0 16 16">
+          <path d="M10.706 3.294A12.545 12.545 0 0 0 8 3C5.259 3 2.723 3.882.663 5.379a.485.485 0 0 0-.048.736.518.518 0 0 0 .668.05A11.448 11.448 0 0 1 8 4c.63 0 1.249.05 1.852.148l.854-.854zM8 6c-1.905 0-3.68.56-5.166 1.526a.48.48 0 0 0-.063.745.525.525 0 0 0 .652.065 8.448 8.448 0 0 1 3.51-1.27L8 6zm2.596 1.404.785-.785c.63.24 1.227.545 1.785.907a.482.482 0 0 1 .063.745.525.525 0 0 1-.652.065 8.462 8.462 0 0 0-1.98-.932zM8 10l.933-.933a6.455 6.455 0 0 1 2.013.637c.285.145.326.524.1.75l-.015.015a.532.532 0 0 1-.611.09A5.478 5.478 0 0 0 8 10zm4.905-4.905.747-.747c.59.3 1.153.645 1.685 1.03a.485.485 0 0 1 .047.737.518.518 0 0 1-.668.05 11.493 11.493 0 0 0-1.811-1.07zM9.02 11.78c.238.14.236.464.04.66l-.707.706a.5.5 0 0 1-.707 0l-.707-.707c-.195-.195-.197-.518.04-.66A1.99 1.99 0 0 1 8 11.5c.374 0 .723.102 1.021.28zm4.355-9.905a.53.53 0 0 1 .75.75l-10.75 10.75a.53.53 0 0 1-.75-.75l10.75-10.75z"/>
+        </svg>
+      </button>
+      <button class="btn btn-danger" type="button" data-uuid="${status[device].uuid}" data-ssid="${status[device].ssid}" onClick="deleteKnownConnectionHandler(this.dataset)">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash-fill" viewBox="0 0 16 16">
+          <path d="M2.5 1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1H3v9a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V4h.5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H10a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1H2.5zm3 4a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 .5-.5zM8 5a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7A.5.5 0 0 1 8 5zm3 .5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 1 0z"/>
+        </svg>
+      </button>
+    ` : "";
+  });
+
+  // Cleanup disconnected devices from UI
+  const wifiSettingsElements = document.querySelectorAll(".wifi-settings");
+  wifiSettingsElements.forEach((we) => {
+    if (devices.includes(we.id)) return;
+    we.remove();
+  });
+}
+
+function updateWifiNetworks({ knownWifiConnections, availableWifiNetworks }) {
+  Object.keys(availableWifiNetworks).forEach(device => {
+    const wifiNetworksFiltered = availableWifiNetworks[device].filter((n) => n.active !== true).map((n) => {
+      // If known connection, add a delete button
+      const knownConnection = knownWifiConnections[device] && knownWifiConnections[device].find((c) => c.ssid === n.ssid) || null;
+
+      const html = `
+        <tr>
+          <td class="security px-0">${n.security != "" ? `
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-lock-fill" viewBox="0 0 16 16">
+              <path d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2zm3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
+            </svg>` : ""}
+          </td>
+          <td class="signal">${n.bars}</td>
+          <td class="ssid" ${knownConnection ? `data-uuid="${knownConnection.uuid}"`: ""} data-ssid="${n.ssid}" data-security="${n.security}" data-device="${device}" onClick="connectToNetworkHandler(this.dataset)">${n.ssid}</td>
+          <td class="deleteButton text-right">${knownConnection ? `
+            <button class="btn btn-danger" type="button" data-uuid="${knownConnection.uuid}" data-ssid="${knownConnection.ssid}" onClick="deleteKnownConnectionHandler(this.dataset)">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash-fill" viewBox="0 0 16 16">
+                <path d="M2.5 1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1H3v9a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V4h.5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H10a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1H2.5zm3 4a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 .5-.5zM8 5a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7A.5.5 0 0 1 8 5zm3 .5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 1 0z"/>
+              </svg>
+            </button>
+          ` : ""}
+          </td>
+        </tr>
+      `;
+
+      return $($.parseHTML(html));
+    });
+
+    // Remove known networks if they are visible in scanlist
+    const knownNetworksFiltered = knownWifiConnections[device] && knownWifiConnections[device].filter((n) => !availableWifiNetworks[device].find((c) => c.ssid === n.ssid)).map((n) => {
+      const html = `
+        <tr class="table-active">
+          <td class="ssid">${n.ssid}</td>
+          <td class="deleteButton text-right">
+            <button class="btn btn-danger" type="button" data-uuid="${n.uuid}" data-ssid="${n.ssid}" onClick="deleteKnownConnectionHandler(this.dataset)">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash-fill" viewBox="0 0 16 16">
+                <path d="M2.5 1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1H3v9a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V4h.5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H10a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1H2.5zm3 4a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 .5-.5zM8 5a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7A.5.5 0 0 1 8 5zm3 .5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 1 0z"/>
+              </svg>
+            </button>
+          </td>
+        </tr>
+      `;
+
+      return $($.parseHTML(html));
+    });
+    
+    $(`#wifiNetworks-${device}`).html(wifiNetworksFiltered);
+    $(`#knownWifiNetworks-${device}`).html(knownNetworksFiltered);
+
+    document.querySelectorAll(".refreshbutton").forEach((button) => button.disabled = false);
+    document.querySelectorAll(".lastRefresh").forEach((el) => el.innerHTML = `Last update: ${new Date().toLocaleTimeString()}`);
+  });
+}
+
 
 /* Error messages */
 function showError(message) {
@@ -324,6 +569,12 @@ function handleMessage(msg) {
         break;
       case 'bitrate':
         updateBitrate(msg[type]);
+        break;
+      case 'wifidevices':
+        updateWifiDevices(msg[type])
+        break;
+      case 'wifinetworks':
+        updateWifiNetworks(msg[type])
         break;
       case 'error':
         showError(msg[type].msg);

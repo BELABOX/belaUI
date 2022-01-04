@@ -19,7 +19,7 @@ const http = require('http');
 const finalhandler = require('finalhandler');
 const serveStatic = require('serve-static');
 const ws = require('ws');
-const { exec, execSync, spawn, spawnSync } = require("child_process");
+const { exec, execSync, spawn, spawnSync, execFileSync } = require("child_process");
 const fs = require('fs')
 const crypto = require('crypto');
 const path = require('path');
@@ -303,6 +303,285 @@ function handleNetif(conn, msg) {
   conn.send(buildMsg('netif', netif));
 }
 
+/* Wifi */
+function getKnownWifiConnections() {
+  try {
+    const connections = execFileSync("nmcli", [
+      "--terse",
+      "--fields",
+      "uuid,type",
+      "connection",
+      "show",
+    ])
+      .toString("utf-8")
+      .split("\n");
+
+    const knownNetworks = {};
+
+    for (const connection of connections) {
+      const [uuid, type] = connection.split(":");
+
+      if (type !== "802-11-wireless") continue;
+
+      // Get the device the connection is bound to and the real ssid, since the connection name is prefixed.
+      const connectionInfo = execFileSync("nmcli", [
+        "--terse",
+        "--fields",
+        "connection.interface-name, 802-11-wireless.ssid",
+        "connection",
+        "show",
+        uuid,
+      ])
+        .toString("utf-8")
+        .split("\n")
+        .map((con) => {
+          return con.split(":")[1];
+        });
+
+      const [device, ssid] = connectionInfo;
+
+      if (device == "") continue;
+
+      if (!knownNetworks[device]) knownNetworks[device] = [];
+
+      knownNetworks[device].push({
+        uuid,
+        ssid,
+      });
+    }
+
+    return knownNetworks;
+  } catch ({ message }) {
+    console.log(message);
+    return [];
+  }
+}
+
+function getStatusWifiDevices() {
+  try {
+    const networkDevices = execFileSync("nmcli", [
+      "--terse",
+      "--fields",
+      "type,device,state,con-uuid",
+      "device",
+      "status",
+    ])
+      .toString("utf-8")
+      .split("\n");
+
+    const statusWifiDevices = {};
+
+    for (const networkDevice of networkDevices) {
+      const [type, device, state, uuid] = networkDevice.split(":");
+
+      if (type !== "wifi" || state == "unavailable") continue;
+
+      statusWifiDevices[device] = {
+        state,
+        uuid,
+        ssid: ""
+      };
+
+      if (!uuid) continue;
+
+      const connectionInfo = execFileSync("nmcli", [
+        "--terse",
+        "--fields",
+        "802-11-wireless.ssid",
+        "connection",
+        "show",
+        uuid,
+      ])
+        .toString("utf-8")
+        .split("\n");
+
+        statusWifiDevices[device].ssid = connectionInfo[0].split(":")[1];
+    }
+
+    return statusWifiDevices;
+  } catch ({ message }) {
+    console.log(message);
+    return {};
+  }
+}
+
+function getAvailableWifiNetworks() {
+  try {
+    const wifiNetworks = execFileSync("nmcli", [
+      "--terse",
+      "--fields",
+      "active,ssid,signal,bars,security,freq,bssid,device",
+      "device",
+      "wifi",
+    ])
+      .toString("utf-8")
+      .split("\n");
+
+    const sortedWifiNetworks = {};
+
+    for (const wifiNetwork of wifiNetworks) {
+      const [active, ssid, signal, bars, security, freq, bssid, device] =
+        wifiNetwork.replace(/\\:/g, "&&").split(":");
+
+      if (ssid == "" || ssid == null || signal < 40) continue;
+
+      if (!sortedWifiNetworks[device]) sortedWifiNetworks[device] = [];
+
+      sortedWifiNetworks[device].push({
+        active: active === "yes" ? true : false,
+        ssid,
+        signal: parseInt(signal),
+        bars,
+        security,
+        freq: parseInt(freq),
+        bssid: bssid.replace(/\&&/g, ":"),
+      });
+    }
+
+    return sortedWifiNetworks;
+  } catch ({ message }) {
+    console.log(message);
+    return {};
+  }
+}
+
+function disconnectWifiDevice(device) {
+  try {
+    const disconnect = execFileSync("nmcli", [
+      "device",
+      "disconnect",
+      device,
+    ]).toString("utf-8");
+
+    console.log("[Wifi]", disconnect);
+  } catch ({ message }) {
+    console.log("[Wifi]", message);
+  }
+}
+
+function deleteKnownConnection(uuid) {
+  try {
+    const deleteCon = execFileSync("nmcli", [
+      "connection",
+      "delete",
+      "uuid",
+      uuid,
+    ]).toString("utf-8");
+
+    console.log("[Wifi]", deleteCon);
+  } catch ({ message }) {
+    console.log("[Wifi]", message);
+  }
+}
+
+function connectToNewNetwork(device, ssid, password) {
+  const args = [
+    "-w",
+    "15",
+    "device",
+    "wifi",
+    "connect",
+    ssid,
+    "ifname",
+    device
+  ]
+
+  if (password) {
+    args.push('password');
+    args.push(password);
+  }
+
+  try {
+    const connect = execFileSync("nmcli", args).toString("utf-8");
+
+    console.log("[Wifi]", connect);
+  } catch ({ message }) {
+    console.log("[Wifi]", message);
+  }
+}
+
+function connectToKnownNetwork(uuid) {
+  try {
+    const connect = execFileSync("nmcli", [
+      "connection",
+      "up",
+      uuid
+    ]).toString("utf-8");
+
+    console.log("[Wifi]", connect);
+  } catch ({ message }) {
+    console.log("[Wifi]", message);
+  }
+}
+
+function handleWifiCommand(conn, type) {
+  switch (type.command) {
+
+    case "connectToNewNetwork":
+      connectToNewNetwork(type.device, type.ssid, type.password);
+      setTimeout(() => {
+        broadcastMsg("wifidevices", getStatusWifiDevices());
+        broadcastMsg("wifinetworks", {
+          knownWifiConnections: getKnownWifiConnections(),
+          availableWifiNetworks: getAvailableWifiNetworks()
+        });
+      }, 250);
+      break;
+
+    case "connectToOpenNetwork":
+      connectToNewNetwork(type.device, type.ssid);
+      setTimeout(() => {
+        broadcastMsg("wifidevices", getStatusWifiDevices());
+        broadcastMsg("wifinetworks", {
+          knownWifiConnections: getKnownWifiConnections(),
+          availableWifiNetworks: getAvailableWifiNetworks()
+        });
+      }, 250);
+      break;
+
+    case "connectToKnownNetwork":
+      connectToKnownNetwork(type.uuid);
+      setTimeout(() => {
+        broadcastMsg("wifidevices", getStatusWifiDevices());
+        broadcastMsg("wifinetworks", {
+          knownWifiConnections: getKnownWifiConnections(),
+          availableWifiNetworks: getAvailableWifiNetworks()
+        });
+      }, 250);
+      break;
+    
+    case "refreshNetworks":
+      broadcastMsg("wifidevices", getStatusWifiDevices());
+      broadcastMsg("wifinetworks", {
+        knownWifiConnections: getKnownWifiConnections(),
+        availableWifiNetworks: getAvailableWifiNetworks()
+      });
+      break;
+    case "disconnectWifiDevice":
+      disconnectWifiDevice(type.device);
+      // Add small delay to allow state of device to update
+      setTimeout(() => {
+        broadcastMsg("wifidevices", getStatusWifiDevices());
+        broadcastMsg("wifinetworks", {
+          knownWifiConnections: getKnownWifiConnections(),
+          availableWifiNetworks: getAvailableWifiNetworks()
+        });
+      }, 250);
+      break;     
+    case "deleteKnownConnection":
+      deleteKnownConnection(type.uuid)
+      // Add small delay to allow state of device to update
+      setTimeout(() => {
+        broadcastMsg("wifidevices", getStatusWifiDevices());
+        broadcastMsg("wifinetworks", {
+          knownWifiConnections: getKnownWifiConnections(),
+          availableWifiNetworks: getAvailableWifiNetworks()
+        });
+      }, 250);
+      break;
+  };
+};
+
 /* Remote */
 const remoteProtocolVersion = 2;
 const remoteEndpoint = 'wss://remote.belabox.net/ws/remote';
@@ -395,7 +674,7 @@ function remoteConnect() {
     console.log(`remote: trying to connect via ${bindIp}`);
 
     remoteStatusHandled = false;
-    remoteWs = new ws(remoteEndpoint, options = {localAddress: bindIp});
+    remoteWs = new ws(remoteEndpoint, (options = {localAddress: bindIp}));
     remoteWs.isAuthed = false;
     // Set a longer initial connection timeout - mostly to deal with slow DNS
     remoteWs.lastActive = getms() + remoteConnectTimeout - remoteTimeout;
@@ -510,18 +789,18 @@ function updateConfig(conn, params, callback) {
     return startError(conn, "pipeline not specified");
   let pipeline = searchPipelines(params.pipeline);
   if (pipeline == null)
-    return startError(conn, "pipeline not found");
+  return startError(conn, "pipeline not found");
 
   // bitrate
   let bitrate = setBitrate(params);
   if (bitrate == null)
-    return startError(conn, "invalid bitrate range: ");
+  return startError(conn, "invalid bitrate range: ");
 
   // srt latency
   if (params.srt_latency == undefined)
     return startError(conn, "SRT latency not specified");
   if (params.srt_latency < 100 || params.srt_latency > 10000)
-    return startError(conn, "invalid SRT latency " + params.srt_latency + " ms");
+  return startError(conn, "invalid SRT latency " + params.srt_latency + " ms");
 
   // srt streamid
   if (params.srt_streamid == undefined)
@@ -550,7 +829,7 @@ function updateConfig(conn, params, callback) {
       saveConfig();
 
       broadcastMsgExcept(conn, 'config', config);
-      
+
       callback(pipeline);
     } else {
       startError(conn, "failed to resolve SRTLA addr " + params.srtla_addr, senderId);
@@ -607,20 +886,20 @@ function start(conn, params) {
     isStreaming = true;
 
     spawnStreamingLoop(srtlaSendExec, [
-                         9000,
-                         config.srtla_addr,
-                         config.srtla_port,
-                         setup.ips_file
-                       ]);
+      9000,
+      config.srtla_addr,
+      config.srtla_port,
+      setup.ips_file
+    ]);
 
     const belacoderArgs = [
-                            pipeline,
-                            '127.0.0.1',
-                            '9000',
-                            '-d', config.delay,
-                            '-b', setup.bitrate_file,
-                            '-l', config.srt_latency,
-                          ];
+      pipeline,
+      '127.0.0.1',
+      '9000',
+      '-d', config.delay,
+      '-b', setup.bitrate_file,
+      '-l', config.srt_latency,
+    ];
     if (config.srt_streamid != '') {
       belacoderArgs.push('-s');
       belacoderArgs.push(config.srt_streamid);
@@ -705,6 +984,7 @@ function sendInitialStatus(conn) {
   conn.send(buildMsg('netif', netif));
   conn.send(buildMsg('sensors', sensors));
   conn.send(buildMsg('revisions', revisions));
+  conn.send(buildMsg('wifidevices', getStatusWifiDevices()));
 }
 
 function connAuth(conn, sendToken) {
@@ -789,6 +1069,9 @@ function handleMessage(conn, msg, isRemote = false) {
       case 'netif':
         handleNetif(conn, msg[type]);
         break;
+      case 'wifiCommand':
+        handleWifiCommand(conn, msg[type]);
+        break;
       case 'logout':
         if (conn.authToken) {
           delete tempTokens[conn.authToken];
@@ -807,5 +1090,4 @@ function handleMessage(conn, msg, isRemote = false) {
   conn.lastActive = getms();
 }
 
-server.listen(80);
-
+server.listen(process.env.PORT || 80);

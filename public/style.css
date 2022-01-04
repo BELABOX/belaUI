@@ -22,3 +22,27 @@
 #login, #initialPasswordForm {
   max-width: 400px;
 }
+
+.networks>tr:hover {
+  background: rgb(240, 240, 240);
+}
+
+td.security {
+  text-align: right;
+  width: 3%;
+}
+
+td.ssid:hover {
+  cursor: pointer;
+}
+
+td.signal {
+  font-family: monospace;
+  width: 5%;
+  font-size: 14px;
+  vertical-align: bottom;
+}
+
+td.deleteButton {
+  padding: 0.3rem;
+}
