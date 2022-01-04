@@ -347,6 +347,9 @@ function connectToNetworkHandler(dataset) {
     `);
   
     $('#wifiModal').modal({ show: true });
+    setTimeout(() => {
+      $('#connection-password').focus();
+    }, 500);
   }
 }
 

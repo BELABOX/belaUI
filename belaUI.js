@@ -789,18 +789,18 @@ function updateConfig(conn, params, callback) {
     return startError(conn, "pipeline not specified");
   let pipeline = searchPipelines(params.pipeline);
   if (pipeline == null)
-  return startError(conn, "pipeline not found");
+    return startError(conn, "pipeline not found");
 
   // bitrate
   let bitrate = setBitrate(params);
   if (bitrate == null)
-  return startError(conn, "invalid bitrate range: ");
+    return startError(conn, "invalid bitrate range: ");
 
   // srt latency
   if (params.srt_latency == undefined)
     return startError(conn, "SRT latency not specified");
   if (params.srt_latency < 100 || params.srt_latency > 10000)
-  return startError(conn, "invalid SRT latency " + params.srt_latency + " ms");
+    return startError(conn, "invalid SRT latency " + params.srt_latency + " ms");
 
   // srt streamid
   if (params.srt_streamid == undefined)
@@ -829,7 +829,7 @@ function updateConfig(conn, params, callback) {
       saveConfig();
 
       broadcastMsgExcept(conn, 'config', config);
-
+      
       callback(pipeline);
     } else {
       startError(conn, "failed to resolve SRTLA addr " + params.srtla_addr, senderId);
@@ -886,20 +886,20 @@ function start(conn, params) {
     isStreaming = true;
 
     spawnStreamingLoop(srtlaSendExec, [
-      9000,
-      config.srtla_addr,
-      config.srtla_port,
-      setup.ips_file
-    ]);
+                         9000,
+                         config.srtla_addr,
+                         config.srtla_port,
+                         setup.ips_file
+                       ]);
 
     const belacoderArgs = [
-      pipeline,
-      '127.0.0.1',
-      '9000',
-      '-d', config.delay,
-      '-b', setup.bitrate_file,
-      '-l', config.srt_latency,
-    ];
+                            pipeline,
+                            '127.0.0.1',
+                            '9000',
+                            '-d', config.delay,
+                            '-b', setup.bitrate_file,
+                            '-l', config.srt_latency,
+                          ];
     if (config.srt_streamid != '') {
       belacoderArgs.push('-s');
       belacoderArgs.push(config.srt_streamid);
