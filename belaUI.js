@@ -445,6 +445,14 @@ function getAvailableWifiNetworks() {
   }
 }
 
+function refreshWifiNetworks() {
+  broadcastMsg("wifidevices", getStatusWifiDevices());
+  broadcastMsg("wifinetworks", {
+    knownWifiConnections: getKnownWifiConnections(),
+    availableWifiNetworks: getAvailableWifiNetworks()
+  });
+}
+
 function disconnectWifiDevice(device) {
   try {
     const disconnect = execFileSync("nmcli", [
@@ -453,8 +461,10 @@ function disconnectWifiDevice(device) {
       device,
     ]).toString("utf-8");
 
+    refreshWifiNetworks();
     console.log("[Wifi]", disconnect);
   } catch ({ message }) {
+    refreshWifiNetworks();
     console.log("[Wifi]", message);
   }
 }
@@ -468,8 +478,10 @@ function deleteKnownConnection(uuid) {
       uuid,
     ]).toString("utf-8");
 
+    refreshWifiNetworks();
     console.log("[Wifi]", deleteCon);
   } catch ({ message }) {
+    refreshWifiNetworks();
     console.log("[Wifi]", message);
   }
 }
@@ -509,8 +521,10 @@ function connectToNewNetwork(device, ssid, password) {
       ]);
     }
 
+    refreshWifiNetworks();
     console.log("[Wifi]", connect);
   } catch ({ message }) {
+    refreshWifiNetworks();
     console.log("[Wifi]", message);
   }
 }
@@ -523,8 +537,10 @@ function connectToKnownNetwork(uuid) {
       uuid
     ]).toString("utf-8");
 
+    refreshWifiNetworks();
     console.log("[Wifi]", connect);
   } catch ({ message }) {
+    refreshWifiNetworks();
     console.log("[Wifi]", message);
   }
 }
@@ -534,65 +550,24 @@ function handleWifiCommand(conn, type) {
 
     case "connectToNewNetwork":
       connectToNewNetwork(type.device, type.ssid, type.password);
-      setTimeout(() => {
-        broadcastMsg("wifidevices", getStatusWifiDevices());
-        broadcastMsg("wifinetworks", {
-          knownWifiConnections: getKnownWifiConnections(),
-          availableWifiNetworks: getAvailableWifiNetworks()
-        });
-      }, 250);
       break;
 
     case "connectToOpenNetwork":
       connectToNewNetwork(type.device, type.ssid);
-      setTimeout(() => {
-        broadcastMsg("wifidevices", getStatusWifiDevices());
-        broadcastMsg("wifinetworks", {
-          knownWifiConnections: getKnownWifiConnections(),
-          availableWifiNetworks: getAvailableWifiNetworks()
-        });
-      }, 250);
       break;
 
     case "connectToKnownNetwork":
       connectToKnownNetwork(type.uuid);
-      setTimeout(() => {
-        broadcastMsg("wifidevices", getStatusWifiDevices());
-        broadcastMsg("wifinetworks", {
-          knownWifiConnections: getKnownWifiConnections(),
-          availableWifiNetworks: getAvailableWifiNetworks()
-        });
-      }, 250);
       break;
     
     case "refreshNetworks":
-      broadcastMsg("wifidevices", getStatusWifiDevices());
-      broadcastMsg("wifinetworks", {
-        knownWifiConnections: getKnownWifiConnections(),
-        availableWifiNetworks: getAvailableWifiNetworks()
-      });
+      refreshWifiNetworks();
       break;
     case "disconnectWifiDevice":
       disconnectWifiDevice(type.device);
-      // Add small delay to allow state of device to update
-      setTimeout(() => {
-        broadcastMsg("wifidevices", getStatusWifiDevices());
-        broadcastMsg("wifinetworks", {
-          knownWifiConnections: getKnownWifiConnections(),
-          availableWifiNetworks: getAvailableWifiNetworks()
-        });
-      }, 250);
       break;     
     case "deleteKnownConnection":
       deleteKnownConnection(type.uuid)
-      // Add small delay to allow state of device to update
-      setTimeout(() => {
-        broadcastMsg("wifidevices", getStatusWifiDevices());
-        broadcastMsg("wifinetworks", {
-          knownWifiConnections: getKnownWifiConnections(),
-          availableWifiNetworks: getAvailableWifiNetworks()
-        });
-      }, 250);
       break;
   };
 };
