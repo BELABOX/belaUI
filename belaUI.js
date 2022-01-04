@@ -494,6 +494,21 @@ function connectToNewNetwork(device, ssid, password) {
   try {
     const connect = execFileSync("nmcli", args).toString("utf-8");
 
+    // Manually add device to connectino since it is not done automatically
+    const match = connect.match(
+      /[a-f0-9]{8}\-[a-f0-9]{4}\-[a-f0-9]{4}\-[a-f0-9]{4}\-[a-f0-9]{12}/g
+    );
+
+    if (match) {
+      execFileSync("nmcli", [
+        "connection",
+        "modify",
+        match[0],
+        "connection.interface-name",
+        device,
+      ]);
+    }
+
     console.log("[Wifi]", connect);
   } catch ({ message }) {
     console.log("[Wifi]", message);
