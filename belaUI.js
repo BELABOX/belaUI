@@ -547,25 +547,21 @@ function connectToKnownNetwork(uuid) {
 
 function handleWifiCommand(conn, type) {
   switch (type.command) {
-
     case "connectToNewNetwork":
       connectToNewNetwork(type.device, type.ssid, type.password);
       break;
-
     case "connectToOpenNetwork":
       connectToNewNetwork(type.device, type.ssid);
       break;
-
     case "connectToKnownNetwork":
       connectToKnownNetwork(type.uuid);
       break;
-    
     case "refreshNetworks":
       refreshWifiNetworks();
       break;
     case "disconnectWifiDevice":
       disconnectWifiDevice(type.device);
-      break;     
+      break;
     case "deleteKnownConnection":
       deleteKnownConnection(type.uuid)
       break;
