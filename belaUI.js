@@ -423,7 +423,7 @@ function getAvailableWifiNetworks() {
       const [active, ssid, signal, bars, security, freq, bssid, device] =
         wifiNetwork.replace(/\\:/g, "&&").split(":");
 
-      if (ssid == "" || ssid == null || signal < 40) continue;
+      if (ssid == "" || ssid == null) continue;
 
       if (!sortedWifiNetworks[device]) sortedWifiNetworks[device] = [];
 
