@@ -304,6 +304,8 @@ function handleNetif(conn, msg) {
 }
 
 /* Wifi */
+let wifiDeviceMACAddrs = {};
+
 function getKnownWifiConnections() {
   try {
     const connections = execFileSync("nmcli", [
@@ -327,7 +329,7 @@ function getKnownWifiConnections() {
       const connectionInfo = execFileSync("nmcli", [
         "--terse",
         "--fields",
-        "connection.interface-name, 802-11-wireless.ssid",
+        "802-11-wireless.ssid,802-11-wireless.mac-address",
         "connection",
         "show",
         uuid,
@@ -335,12 +337,13 @@ function getKnownWifiConnections() {
         .toString("utf-8")
         .split("\n")
         .map((con) => {
-          return con.split(":")[1];
+          return con.split(':').slice(1).join(':');
         });
 
-      const [device, ssid] = connectionInfo;
+      const device = wifiDeviceMACAddrs[connectionInfo[1].toLowerCase()];
+      const ssid = connectionInfo[0];
 
-      if (device == "") continue;
+      if (!device) continue;
 
       if (!knownNetworks[device]) knownNetworks[device] = [];
 
@@ -375,6 +378,18 @@ function getStatusWifiDevices() {
       const [type, device, state, uuid] = networkDevice.split(":");
 
       if (type !== "wifi" || state == "unavailable") continue;
+
+      const macAddr = execFileSync("nmcli", [
+          "--terse",
+          "--escape", "no",
+          "--get-values",
+          "general.hwaddr",
+          "device",
+          "show",
+          device
+        ]).toString("utf-8").trim().toLowerCase();
+
+      wifiDeviceMACAddrs[macAddr] = device;
 
       statusWifiDevices[device] = {
         state,
@@ -505,21 +520,6 @@ function connectToNewNetwork(device, ssid, password) {
 
   try {
     const connect = execFileSync("nmcli", args).toString("utf-8");
-
-    // Manually add device to connectino since it is not done automatically
-    const match = connect.match(
-      /[a-f0-9]{8}\-[a-f0-9]{4}\-[a-f0-9]{4}\-[a-f0-9]{4}\-[a-f0-9]{12}/g
-    );
-
-    if (match) {
-      execFileSync("nmcli", [
-        "connection",
-        "modify",
-        match[0],
-        "connection.interface-name",
-        device,
-      ]);
-    }
 
     console.log("[Wifi]", connect);
   } catch ({ message }) {
