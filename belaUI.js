@@ -361,33 +361,37 @@ function getKnownWifiConnections() {
 }
 
 function getStatusWifiDevices() {
+  let networkDevices;
   try {
-    const networkDevices = execFileSync("nmcli", [
+    networkDevices = execFileSync("nmcli", [
       "--terse",
       "--fields",
       "type,device,state,con-uuid",
       "device",
       "status",
-    ])
-      .toString("utf-8")
-      .split("\n");
+    ]).toString("utf-8").split("\n");
+  } catch (err) {
+    console.log(`Error getting the nmcli device list: ${err.message}`);
+    return {};
+  }
 
-    const statusWifiDevices = {};
+  const statusWifiDevices = {};
 
-    for (const networkDevice of networkDevices) {
+  for (const networkDevice of networkDevices) {
+    try {
       const [type, device, state, uuid] = networkDevice.split(":");
 
       if (type !== "wifi" || state == "unavailable") continue;
 
       const macAddr = execFileSync("nmcli", [
-          "--terse",
-          "--escape", "no",
-          "--get-values",
-          "general.hwaddr",
-          "device",
-          "show",
-          device
-        ]).toString("utf-8").trim().toLowerCase();
+        "--terse",
+        "--escape", "no",
+        "--get-values",
+        "general.hwaddr",
+        "device",
+        "show",
+        device
+      ]).toString("utf-8").trim().toLowerCase();
 
       wifiDeviceMACAddrs[macAddr] = device;
 
@@ -406,18 +410,15 @@ function getStatusWifiDevices() {
         "connection",
         "show",
         uuid,
-      ])
-        .toString("utf-8")
-        .split("\n");
+      ]).toString("utf-8").split("\n");
 
-        statusWifiDevices[device].ssid = connectionInfo[0].split(":")[1];
+      statusWifiDevices[device].ssid = connectionInfo[0].split(":")[1];
+    } catch (err) {
+      console.log(`Error getting the nmcli WiFi device information: ${err.message}`);
     }
-
-    return statusWifiDevices;
-  } catch ({ message }) {
-    console.log(message);
-    return {};
   }
+
+  return statusWifiDevices;
 }
 
 function getAvailableWifiNetworks() {
