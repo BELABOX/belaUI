@@ -306,6 +306,11 @@ function handleNetif(conn, msg) {
 /* Wifi */
 let wifiDeviceMACAddrs = {};
 
+// parses : separated values, with automatic \ escape detection and stripping
+function parseNmcliSep(value) {
+  return value.split(/(?<!\\):/).map(a => a.replace(/\\:/g, ':'));
+}
+
 function getKnownWifiConnections() {
   let connections;
   try {
@@ -324,24 +329,20 @@ function getKnownWifiConnections() {
 
   for (const connection of connections) {
     try {
-      const [uuid, type] = connection.split(":");
+      const [uuid, type] = parseNmcliSep(connection);
 
       if (type !== "802-11-wireless") continue;
 
       // Get the device the connection is bound to and the real ssid, since the connection name is prefixed.
       const connectionInfo = execFileSync("nmcli", [
         "--terse",
-        "--fields",
+        "--escape", "no",
+        "--get-values",
         "802-11-wireless.ssid,802-11-wireless.mac-address",
         "connection",
         "show",
         uuid,
-      ])
-        .toString("utf-8")
-        .split("\n")
-        .map((con) => {
-          return con.split(':').slice(1).join(':');
-        });
+      ]).toString("utf-8").split("\n");
 
       const device = wifiDeviceMACAddrs[connectionInfo[1].toLowerCase()];
       const ssid = connectionInfo[0];
@@ -381,7 +382,7 @@ function getStatusWifiDevices() {
 
   for (const networkDevice of networkDevices) {
     try {
-      const [type, device, state, uuid] = networkDevice.split(":");
+      const [type, device, state, uuid] = parseNmcliSep(networkDevice);
 
       if (type !== "wifi" || state == "unavailable") continue;
 
@@ -405,16 +406,17 @@ function getStatusWifiDevices() {
 
       if (!uuid) continue;
 
-      const connectionInfo = execFileSync("nmcli", [
+      const ssid = execFileSync("nmcli", [
         "--terse",
-        "--fields",
+        "--escape", "no",
+        "--get-values",
         "802-11-wireless.ssid",
         "connection",
         "show",
         uuid,
-      ]).toString("utf-8").split("\n");
+      ]).toString("utf-8").trim();
 
-      statusWifiDevices[device].ssid = connectionInfo[0].split(":")[1];
+      statusWifiDevices[device].ssid = ssid;
     } catch (err) {
       console.log(`Error getting the nmcli WiFi device information: ${err.message}`);
     }
@@ -431,15 +433,13 @@ function getAvailableWifiNetworks() {
       "active,ssid,signal,bars,security,freq,bssid,device",
       "device",
       "wifi",
-    ])
-      .toString("utf-8")
-      .split("\n");
+    ]).toString("utf-8").split("\n");
 
     const sortedWifiNetworks = {};
 
     for (const wifiNetwork of wifiNetworks) {
       const [active, ssid, signal, bars, security, freq, bssid, device] =
-        wifiNetwork.replace(/\\:/g, "&&").split(":");
+        parseNmcliSep(wifiNetwork);
 
       if (ssid == "" || ssid == null) continue;
 
@@ -452,7 +452,7 @@ function getAvailableWifiNetworks() {
         bars,
         security,
         freq: parseInt(freq),
-        bssid: bssid.replace(/\&&/g, ":"),
+        bssid,
       });
     }
 
