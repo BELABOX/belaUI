@@ -307,20 +307,23 @@ function handleNetif(conn, msg) {
 let wifiDeviceMACAddrs = {};
 
 function getKnownWifiConnections() {
+  let connections;
   try {
-    const connections = execFileSync("nmcli", [
+    connections = execFileSync("nmcli", [
       "--terse",
       "--fields",
       "uuid,type",
       "connection",
       "show",
-    ])
-      .toString("utf-8")
-      .split("\n");
+    ]).toString("utf-8").split("\n");
+  } catch (err) {
+    console.log(`Error getting the nmcli connection list: ${err.message}`);
+    return {};
+  }
+  const knownNetworks = {};
 
-    const knownNetworks = {};
-
-    for (const connection of connections) {
+  for (const connection of connections) {
+    try {
       const [uuid, type] = connection.split(":");
 
       if (type !== "802-11-wireless") continue;
@@ -351,13 +354,12 @@ function getKnownWifiConnections() {
         uuid,
         ssid,
       });
+    }  catch (err) {
+      console.log(`Error getting the nmcli connection information: ${err.message}`);
     }
-
-    return knownNetworks;
-  } catch ({ message }) {
-    console.log(message);
-    return [];
   }
+
+  return knownNetworks;
 }
 
 function getStatusWifiDevices() {
