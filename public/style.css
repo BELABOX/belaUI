@@ -23,26 +23,37 @@
   max-width: 400px;
 }
 
-.networks>tr:hover {
-  background: rgb(240, 240, 240);
+td.signal {
+  width: 20px;
+}
+
+td.band {
+  width: 40px;
+  font-family: monospace;
+  font-size: 12px;
 }
 
 td.security {
   text-align: right;
-  width: 3%;
+  width: 20px;
 }
 
-td.ssid:hover {
+.can-connect {
   cursor: pointer;
 }
 
-td.signal {
-  font-family: monospace;
-  width: 5%;
-  font-size: 14px;
+.networks td {
   vertical-align: bottom;
 }
 
-td.deleteButton {
-  padding: 0.3rem;
+@media screen and (max-width: 500px) {
+  .button-text {
+    display: none;
+  }
+}
+
+@media screen and (min-width: 500px) {
+  .button-icon {
+    display: none;
+  }
 }

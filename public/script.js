@@ -235,6 +235,10 @@ function updateStatus(status) {
   if (status.set_password === true) {
     showInitialPasswordForm();
   }
+
+  if (status.wifi) {
+    updateWifiState(status.wifi);
+  }
 }
 
 
@@ -284,253 +288,361 @@ function updateBitrate(br) {
   showBitrate(br.max_br);
 }
 
-/* Wifi Settings */
-const wifiElement = document.querySelector("#wifi");
 
-// Function to request a refresh of the wifi networks
-function refreshWifiNetworks() {
+/* WiFi manager */
+function wifiScan(button, deviceId) {
   if (!ws) return;
-  ws.send(JSON.stringify({ 
-    wifiCommand: {
-      command: "refreshNetworks",
+
+  // Disable the search button immediately
+  const wifiManager = $(button).parents('.wifi-settings');
+  wifiManager.find('.wifi-scan-button').attr('disabled', true);
+
+  // Send the request
+  ws.send(JSON.stringify({wifi: {scan: deviceId}}));
+
+  // Duration
+  const searchDuration = 10000;
+
+  setTimeout(function() {
+    wifiManager.find('.wifi-scan-button').attr('disabled', false);
+    wifiManager.find('.scanning').addClass('d-none');
+  }, searchDuration);
+
+  wifiManager.find('.connect-error').addClass('d-none');
+  wifiManager.find('.scanning').removeClass('d-none');
+}
+
+function wifiSendNewConnection() {
+  $('#wifiNewErrAuth').addClass('d-none');
+  $('#wifiNewErrGeneric').addClass('d-none');
+  $('#wifiNewConnecting').removeClass('d-none');
+
+  $('#wifiConnectButton').attr('disabled', true);
+
+  const device = $('#connection-device').val();
+  const ssid = $('#connection-ssid').val();
+  const password = $('#connection-password').val();
+
+  ws.send(JSON.stringify({
+    wifi: {
+      new: {
+        device,
+        ssid,
+        password
+      }
     }
   }));
 
-  // Disable buttons and add a loading spinner
-  document.querySelectorAll(".refreshbutton").forEach((button) => button.disabled = true);
-  document.querySelectorAll(".networks").forEach((network) => network.innerHTML = `
-    <tr>
-      <td>
-        <div class="text-center">
-          <div class="spinner-border" role="status">
-            <span class="sr-only">Loading...</span>
-          </div>
-        </div>
-      </td>
-    </tr>
-  `);
-  document.querySelectorAll(".knownNetworks").forEach((network) => network.innerHTML = "");
-};
+  return false;
+}
 
-function connectToNetworkHandler(dataset) {
-  if (dataset.uuid) {
-    ws.send(JSON.stringify({ 
-      wifiCommand: {
-        command: "connectToKnownNetwork",
-        uuid: dataset.uuid
-      },
-    }));
-  } else if (dataset.security === "") {
-    ws.send(JSON.stringify({ 
-      wifiCommand: {
-        command: "connectToOpenNetwork",
-        ssid: dataset.ssid,
-        device: dataset.device
-      },
-    }));
+function wifiConnect(e) {
+  const network = $(e).parents('tr.network').data('network');
+
+  if (network.active) return;
+
+  if (network.uuid) {
+    ws.send(JSON.stringify({wifi: {connect: network.uuid}}));
+
+    const wifiManager = $(e).parents('.wifi-settings');
+    wifiManager.find('.connect-error').addClass('d-none');
+    wifiManager.find('.connecting').removeClass('d-none');
   } else {
-    $('#wifiModal').find('#wifiModalTitle').text("Connect to network");
-    $('#wifiModal').find('#wifiModalBody').html(`
-      <form>
-        <div class="form-group">
-          <label for="connection-ssid" class="col-form-label">SSID</label>
-          <input type="text" class="form-control" id="connection-ssid" value="${dataset.ssid}" readonly>
-        </div>
-        <div class="form-group">
-          <label for="connection-password" class="col-form-label">Password</label>
-          <input type="password" class="form-control" id="connection-password">
-        </div>
-      </form>
-    `);
-    $('#wifiModal').find('#wifiModalFooter').html(`
-      <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-      <button type="button" class="btn btn-success" data-dismiss="modal" onClick="connectToNetworkWithPW('${dataset.device}', '${dataset.ssid}')">Connect</button>
-    `);
-  
-    $('#wifiModal').modal({ show: true });
-    setTimeout(() => {
-      $('#connection-password').focus();
-    }, 500);
+    if (network.security === "") {
+      if (confirm(`Connect to the open network ${network.ssid}?`)) {
+        ws.send(JSON.stringify({
+          wifi: {
+            new: {
+              ssid: network.ssid,
+              device: network.device
+            }
+          }
+        }));
+      }
+    } else {
+      if (network.security.match('802.1X')) {
+        alert("This network uses 802.1X enterprise authentication, " +
+              "which belaUI doesn't support at the moment");
+      } else if (network.security.match('WEP')) {
+        alert("This network uses legacy WEP authentication, " +
+              "which belaUI doesn't support");
+      } else {
+        $('#connection-ssid').val(network.ssid);
+        $('#connection-device').val(network.device);
+        $('#connection-password').val('');
+        $('.wifi-new-status').addClass('d-none');
+        $('#wifiConnectButton').attr('disabled', false);
+        $('#wifiModal').modal({ show: true });
+
+        setTimeout(() => {
+          $('#connection-password').focus();
+        }, 500);
+      }
+    }
   }
 }
 
-function connectToNetworkWithPW(device, ssid) {
-  const password = $('#connection-password').val();
+function wifiDisconnect(e) {
+  const network = $(e).parents('tr').data('network');
 
-  ws.send(JSON.stringify({ 
-    wifiCommand: {
-      command: "connectToNewNetwork",
-      device,
-      ssid,
-      password
-    },
-  }));
+  if (confirm(`Disconnect from ${network.ssid}?`)) {
+    ws.send(JSON.stringify({
+      wifi: {
+        disconnect: network.uuid
+      },
+    }));
+  }
 }
 
-function deleteKnownConnectionHandler(dataset) {
-  $('#wifiModal').find('#wifiModalTitle').text("Delete connection?");
-  $('#wifiModal').find('#wifiModalBody').html(`
-    <form>
-      <div class="form-group">
-        <label for="connection-name" class="col-form-label">Connection:</label>
-        <input type="text" class="form-control" id="connection-name" value="${dataset.ssid}" readonly>
-      </div>
-    </form>
-  `);
-  $('#wifiModal').find('#wifiModalFooter').html(`
-    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-    <button  type="button" class="btn btn-danger" data-dismiss="modal" onClick="deleteKnownConnection('${dataset.uuid}')">Delete</button>
-  `);
+function wifiForget(e) {
+  const network = $(e).parents('tr').data('network');
 
-  $('#wifiModal').modal({ show: true });
+  if (confirm(`Forget network ${network.ssid}?`)) {
+    ws.send(JSON.stringify({
+      wifi: {
+        forget: network.uuid
+      },
+    }));
+  }
 }
 
-function deleteKnownConnection(uuid) {
-  ws.send(JSON.stringify({ 
-    wifiCommand: {
-      command: "deleteKnownConnection",
-      uuid
-    },
-  }));
+function wifiFindCardId(deviceId) {
+  return `wifi-manager-${parseInt(deviceId)}`;
 }
 
-function disconnectWifiDevice(device) {
-  ws.send(JSON.stringify({ 
-    wifiCommand: {
-      command: "disconnectWifiDevice",
-      device
-    },
-  }));
+function wifiSignalSymbol(signal) {
+  if (signal < 0) signal = 0;
+  if (signal > 100) signal = 100;
+  const symbol = 9601 + Math.floor(signal / 12.51);
+  let cl = "text-success";
+  if (signal < 40) {
+    cl = "text-danger";
+  } else if (signal < 75) {
+    cl = "text-warning";
+  }
+  return `<span class="${cl}">&#${symbol}</span>`;
 }
 
-// Update wifi devices based on new status
-function updateWifiDevices(status) {
-  const devices = Object.keys(status);
+function wifiListAvailableNetwork(device, deviceId, a) {
+  const savedUuid = device.saved[a.ssid];
+  if (savedUuid) {
+    delete device.saved[a.ssid];
+  }
 
-  devices.forEach((device) => {
-    // If wifi device is not yet on the page, add it.
-    if (document.querySelector(`#${device}`) == null) {
+  const html = `
+    <tr class="network">
+      <td class="signal px-0"></td>
+      <td class="band px-0"></td>
+      <td class="security px-0"></td>
+      <td class="text-break">
+        <span class="connected d-none"><u>Connected</u><br/></span>
+        <span class="ssid" onClick="wifiConnect(this)"></span>
+      </td>
+      <td class="text-right px-0">
+        <button class="d-none btn btn-warning px-1 py-0 disconnect btn-sm btn-netact"
+                onClick="wifiDisconnect(this)" title="Disconnect">
+          <span class="font-weight-bold button-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-wifi-off" viewBox="0 0 16 16">
+              <path d="M10.706 3.294A12.545 12.545 0 0 0 8 3C5.259 3 2.723 3.882.663 5.379a.485.485 0 0 0-.048.736.518.518 0 0 0 .668.05A11.448 11.448 0 0 1 8 4c.63 0 1.249.05 1.852.148l.854-.854zM8 6c-1.905 0-3.68.56-5.166 1.526a.48.48 0 0 0-.063.745.525.525 0 0 0 .652.065 8.448 8.448 0 0 1 3.51-1.27L8 6zm2.596 1.404.785-.785c.63.24 1.227.545 1.785.907a.482.482 0 0 1 .063.745.525.525 0 0 1-.652.065 8.462 8.462 0 0 0-1.98-.932zM8 10l.933-.933a6.455 6.455 0 0 1 2.013.637c.285.145.326.524.1.75l-.015.015a.532.532 0 0 1-.611.09A5.478 5.478 0 0 0 8 10zm4.905-4.905.747-.747c.59.3 1.153.645 1.685 1.03a.485.485 0 0 1 .047.737.518.518 0 0 1-.668.05 11.493 11.493 0 0 0-1.811-1.07zM9.02 11.78c.238.14.236.464.04.66l-.707.706a.5.5 0 0 1-.707 0l-.707-.707c-.195-.195-.197-.518.04-.66A1.99 1.99 0 0 1 8 11.5c.374 0 .723.102 1.021.28zm4.355-9.905a.53.53 0 0 1 .75.75l-10.75 10.75a.53.53 0 0 1-.75-.75l10.75-10.75z"/>
+            </svg>
+          </span>
+          <span class="button-text">Disconnect</span>
+        </button>
+        <button class="d-none btn btn-danger px-1 py-0 forget btn-sm btn-netact"
+                onClick="wifiForget(this)" title="Forget">
+          <span class="font-weight-bold button-icon">&#128465;</span>
+          <span class="button-text">Forget</span>
+        </button>
+      </td>
+    </tr>`;
+
+  const network = $($.parseHTML(html));
+  network.find('.signal').html(wifiSignalSymbol(a.signal));// + '%');
+  network.find('.band').html((a.freq > 5000) ? '5&#13203;' : '2.4&#13203;');
+  const ssidEl = network.find('.ssid');
+  ssidEl.text(a.ssid);
+
+  network.data('network', {active: a.active, uuid: savedUuid, ssid: a.ssid, device: deviceId, security: a.security});
+
+  if (a.security != '') {
+    // show a cross mark for 802.1X or WEP networks (unsupported)
+    // or a lock symbol for PSK networks (supported)
+    network.find('.security').html(a.security.match(/802\.1X|WEP/) ? '&#10060;' : '&#128274;');
+  }
+  if (a.active) {
+    network.find('.disconnect').removeClass('d-none');
+    network.find('.connected').removeClass('d-none');
+  }
+  if (!a.active) {
+    network.find('.ssid').addClass('can-connect');
+  }
+  if (savedUuid) {
+    network.find('.forget').removeClass('d-none');
+  }
+
+  return network;
+}
+
+function wifiListSavedNetwork(ssid, uuid) {
+  const html = `
+    <tr class="network">
+      <td class="ssid col-11"></td>
+      <td class="col-1">
+        <button class="btn btn-danger px-1 py-0 forget btn-sm btn-netact"
+                onClick="wifiForget(this)" title="Forget">
+          <span class="font-weight-bold button-icon">&#128465;</span>
+          <span class="button-text">Forget</span>
+        </button>
+      </td>
+    </tr>`;
+
+  const network = $($.parseHTML(html));
+  network.find('.ssid').text(ssid);
+
+  network.data('network', {ssid, uuid});
+
+  return network;
+}
+
+let wifiIfs = {};
+function updateWifiState(msg) {
+  for (const i in wifiIfs) {
+    wifiIfs[i].removed = true;
+  }
+
+  for (let deviceId in msg) {
+    deviceId = parseInt(deviceId);
+
+    // Mark the interface as not removed
+    if (wifiIfs[deviceId]) {
+      delete wifiIfs[deviceId].removed;
+    }
+
+    const cardId = wifiFindCardId(deviceId);
+    const device = msg[deviceId];
+    let deviceCard = $(`#${cardId}`);
+
+    if (deviceCard.length == 0) {
       const html = `
-        <div id="${device}" class="wifi-settings card mb-2">
-          <div class="card-header bg-success text-center" type="button" data-toggle="collapse" data-target="#collapseWifi-${device}">
-            <button class="btn btn-link text-white" type="button" data-toggle="collapse" data-target="#collapseWifi-${device}" aria-expanded="false" aria-controls="collapseWifi-${device}">
-              Wifi settings: <strong>${device}</strong>
+        <div id="${cardId}" class="wifi-settings card mb-2">
+          <div class="card-header bg-success text-center" type="button" data-toggle="collapse" data-target="#collapseWifi-${deviceId}">
+            <button class="btn btn-link text-white" type="button" data-toggle="collapse" data-target="#collapseWifi-${deviceId}" aria-expanded="false" aria-controls="collapseWifi-${deviceId}">
+              Wifi: <strong class="device-name"></strong>
             </button>
           </div>
 
-          <div class="collapse" id="collapseWifi-${device}">
+          <div class="collapse" id="collapseWifi-${deviceId}">
             <div class="card-body">
-
-              <label for="connection-${device}">Current connection</label>
-              <div class="input-group mb-2">
-                <input type="text" id="connection-${device}" class="form-control text-center" value="----" readonly>
-                <div id="conButtons-${device}" class="input-group-append"></div>
-              </div>
-
-              <hr class="mb-4">
-
-              <button type="button" id="refreshNetworks-${device}" class="btn btn-block btn-warning btn-netact mb-2 refreshbutton" onClick="refreshWifiNetworks()">
-                Scan Wifi List
+              <button type="button" class="btn btn-block btn-secondary btn-netact mb-2 wifi-scan-button" onClick="wifiScan(this, ${deviceId})">
+                Scan for WiFi networks
               </button>
 
-              <div class="mb-3 text-secondary text-center small lastRefresh"></div>
+              <div class="connecting small text-info d-none">
+                <div class="spinner-border spinner-border-sm" role="status">
+                </div>
+                Connecting...
+              </div>
 
-              <table class="table mb-2">
-                <tbody id="wifiNetworks-${device}" class="networks"></tbody>
+              <div class="connect-error small text-info d-none">
+                Error connecting to the network. Has the password changed?
+              </div>
+
+              <div class="scanning small text-info d-none">
+                <div class="spinner-border spinner-border-sm" role="status">
+                </div>
+                Scanning...
+              </div>
+
+              <table class="table mb-2 table-hover table-sm small">
+                <tbody class="networks available-networks"></tbody>
               </table>
 
-              <table class="table mb-0">
-                <tbody id="knownWifiNetworks-${device}" class="knownNetworks"></tbody>
+              <table class="d-none table mt-4 table-hover table-sm small saved-networks">
+                <thead>
+                  <th colspan=2>Other saved networks</th>
+                </thead>
+                <tbody class="networks saved-networks"></tbody>
               </table>
-  
             </div>
           </div>
-        </div>
-      `
+        </div>`;
 
-      wifiElement.insertAdjacentHTML('beforeend', html);
-    };
+      deviceCard = $($.parseHTML(html));
 
-    // Set values for current connection
-    document.getElementById(`connection-${device}`).value = status[device].ssid ? status[device].ssid : "----";
+      deviceCard.appendTo('#wifi');
+    }
 
-    // Add / Remove buttons for current connection
-    const conButtons = document.getElementById(`conButtons-${device}`);
-    conButtons.innerHTML = status[device].ssid ? `
-      <button class="btn btn-secondary px-4" type="button" data-device="${device}" onClick="disconnectWifiDevice(this.dataset.device)">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-wifi-off" viewBox="0 0 16 16">
-          <path d="M10.706 3.294A12.545 12.545 0 0 0 8 3C5.259 3 2.723 3.882.663 5.379a.485.485 0 0 0-.048.736.518.518 0 0 0 .668.05A11.448 11.448 0 0 1 8 4c.63 0 1.249.05 1.852.148l.854-.854zM8 6c-1.905 0-3.68.56-5.166 1.526a.48.48 0 0 0-.063.745.525.525 0 0 0 .652.065 8.448 8.448 0 0 1 3.51-1.27L8 6zm2.596 1.404.785-.785c.63.24 1.227.545 1.785.907a.482.482 0 0 1 .063.745.525.525 0 0 1-.652.065 8.462 8.462 0 0 0-1.98-.932zM8 10l.933-.933a6.455 6.455 0 0 1 2.013.637c.285.145.326.524.1.75l-.015.015a.532.532 0 0 1-.611.09A5.478 5.478 0 0 0 8 10zm4.905-4.905.747-.747c.59.3 1.153.645 1.685 1.03a.485.485 0 0 1 .047.737.518.518 0 0 1-.668.05 11.493 11.493 0 0 0-1.811-1.07zM9.02 11.78c.238.14.236.464.04.66l-.707.706a.5.5 0 0 1-.707 0l-.707-.707c-.195-.195-.197-.518.04-.66A1.99 1.99 0 0 1 8 11.5c.374 0 .723.102 1.021.28zm4.355-9.905a.53.53 0 0 1 .75.75l-10.75 10.75a.53.53 0 0 1-.75-.75l10.75-10.75z"/>
-        </svg>
-      </button>
-      <button class="btn btn-danger" type="button" data-uuid="${status[device].uuid}" data-ssid="${status[device].ssid}" onClick="deleteKnownConnectionHandler(this.dataset)">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash-fill" viewBox="0 0 16 16">
-          <path d="M2.5 1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1H3v9a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V4h.5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H10a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1H2.5zm3 4a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 .5-.5zM8 5a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7A.5.5 0 0 1 8 5zm3 .5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 1 0z"/>
-        </svg>
-      </button>
-    ` : "";
-  });
+    // Update the card's header
+    deviceCard.find('.device-name').text(device.ifname);
 
-  // Cleanup disconnected devices from UI
-  const wifiSettingsElements = document.querySelectorAll(".wifi-settings");
-  wifiSettingsElements.forEach((we) => {
-    if (devices.includes(we.id)) return;
-    we.remove();
-  });
+    // Show the available networks
+    let networkList = [];
+
+    for (const a of msg[deviceId].available) {
+      if (a.active) {
+        networkList.push(wifiListAvailableNetwork(device, deviceId, a));
+      }
+    }
+
+    for (const a of msg[deviceId].available) {
+      if (!a.active) {
+        networkList.push(wifiListAvailableNetwork(device, deviceId, a));
+      }
+    }
+
+    deviceCard.find('.available-networks').html(networkList);
+
+    // Show the saved networks
+    networkList = [];
+    for (const ssid in msg[deviceId].saved) {
+      const uuid = msg[deviceId].saved[ssid];
+      networkList.push(wifiListSavedNetwork(ssid, uuid));
+    }
+
+    if (networkList.length) {
+      deviceCard.find('tbody.saved-networks').html(networkList);
+      deviceCard.find('table.saved-networks').removeClass('d-none');
+    } else {
+      deviceCard.find('table.saved-networks').addClass('d-none');
+    }
+  }
+
+  for (const i in wifiIfs) {
+    if (wifiIfs[i].removed) {
+      const cardId = wifiFindCardId(i);
+      $(`#${cardId}`).remove();
+    }
+  }
+
+  wifiIfs = msg;
 }
 
-function updateWifiNetworks({ knownWifiConnections, availableWifiNetworks }) {
-  Object.keys(availableWifiNetworks).forEach(device => {
-    const wifiNetworksFiltered = availableWifiNetworks[device].filter((n) => n.active !== true).map((n) => {
-      // If known connection, add a delete button
-      const knownConnection = knownWifiConnections[device] && knownWifiConnections[device].find((c) => c.ssid === n.ssid) || null;
+function handleWifiResult(msg) {
+  if (msg.connect !== undefined) {
+    const wifiManagerId = `#${wifiFindCardId(msg.device)}`;
+    $(wifiManagerId).find('.connecting').addClass('d-none');
+    if (msg.connect === false) {
+      $(wifiManagerId).find('.connect-error').removeClass('d-none');
+    }
+  } else if (msg.new) {
+    if (msg.new.error) {
+      $('#wifiNewConnecting').addClass('d-none');
 
-      const html = `
-        <tr>
-          <td class="security px-0">${n.security != "" ? `
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-lock-fill" viewBox="0 0 16 16">
-              <path d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2zm3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
-            </svg>` : ""}
-          </td>
-          <td class="signal">${n.bars}</td>
-          <td class="ssid" ${knownConnection ? `data-uuid="${knownConnection.uuid}"`: ""} data-ssid="${n.ssid}" data-security="${n.security}" data-device="${device}" onClick="connectToNetworkHandler(this.dataset)">${n.ssid}</td>
-          <td class="deleteButton text-right">${knownConnection ? `
-            <button class="btn btn-danger" type="button" data-uuid="${knownConnection.uuid}" data-ssid="${knownConnection.ssid}" onClick="deleteKnownConnectionHandler(this.dataset)">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash-fill" viewBox="0 0 16 16">
-                <path d="M2.5 1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1H3v9a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V4h.5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H10a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1H2.5zm3 4a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 .5-.5zM8 5a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7A.5.5 0 0 1 8 5zm3 .5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 1 0z"/>
-              </svg>
-            </button>
-          ` : ""}
-          </td>
-        </tr>
-      `;
+      switch (msg.new.error) {
+        case 'auth':
+          $('#wifiNewErrAuth').removeClass('d-none');
+          break;
+        case 'generic':
+          $('#wifiNewErrGeneric').removeClass('d-none');
+          break;
+      }
 
-      return $($.parseHTML(html));
-    });
-
-    // Remove known networks if they are visible in scanlist
-    const knownNetworksFiltered = knownWifiConnections[device] && knownWifiConnections[device].filter((n) => !availableWifiNetworks[device].find((c) => c.ssid === n.ssid)).map((n) => {
-      const html = `
-        <tr class="table-active">
-          <td class="ssid">${n.ssid}</td>
-          <td class="deleteButton text-right">
-            <button class="btn btn-danger" type="button" data-uuid="${n.uuid}" data-ssid="${n.ssid}" onClick="deleteKnownConnectionHandler(this.dataset)">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash-fill" viewBox="0 0 16 16">
-                <path d="M2.5 1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1H3v9a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V4h.5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H10a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1H2.5zm3 4a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 .5-.5zM8 5a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7A.5.5 0 0 1 8 5zm3 .5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 1 0z"/>
-              </svg>
-            </button>
-          </td>
-        </tr>
-      `;
-
-      return $($.parseHTML(html));
-    });
-    
-    $(`#wifiNetworks-${device}`).html(wifiNetworksFiltered);
-    $(`#knownWifiNetworks-${device}`).html(knownNetworksFiltered);
-
-    document.querySelectorAll(".refreshbutton").forEach((button) => button.disabled = false);
-    document.querySelectorAll(".lastRefresh").forEach((el) => el.innerHTML = `Last update: ${new Date().toLocaleTimeString()}`);
-  });
+      $('#wifiConnectButton').attr('disabled', false);
+    }
+    if (msg.new.success) {
+      $('#wifiModal').modal('hide');
+    }
+  }
 }
 
 
@@ -574,11 +686,8 @@ function handleMessage(msg) {
       case 'bitrate':
         updateBitrate(msg[type]);
         break;
-      case 'wifidevices':
-        updateWifiDevices(msg[type])
-        break;
-      case 'wifinetworks':
-        updateWifiNetworks(msg[type])
+      case 'wifi':
+        handleWifiResult(msg[type]);
         break;
       case 'error':
         showError(msg[type].msg);

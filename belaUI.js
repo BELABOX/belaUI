@@ -19,7 +19,7 @@ const http = require('http');
 const finalhandler = require('finalhandler');
 const serveStatic = require('serve-static');
 const ws = require('ws');
-const { exec, execSync, spawn, spawnSync, execFileSync } = require("child_process");
+const { exec, execSync, spawn, spawnSync, execFileSync, execFile } = require("child_process");
 const fs = require('fs')
 const crypto = require('crypto');
 const path = require('path');
@@ -227,6 +227,7 @@ function getPipelineList() {
 
 /* Network interface list */
 let netif = {};
+
 function updateNetif() {
   exec("ifconfig", (error, stdout, stderr) => {
     if (error) {
@@ -237,15 +238,27 @@ function updateNetif() {
     let foundNewInt = false;
     const newints = {};
 
+    wiFiDeviceListStartUpdate();
+
     const interfaces = stdout.split("\n\n");
     for (const int of interfaces) {
       try {
-        const name = int.split(':')[0]
+        const name = int.split(':')[0];
+
+        let inetAddr = int.match(/inet (\d+\.\d+\.\d+\.\d+)/);
+        if (inetAddr) inetAddr = inetAddr[1];
+
+        // update the list of WiFi devices
+        if (name && name.match('^wlan')) {
+          let hwAddr = int.match(/ether ([0-9a-f:]+)/);
+          if (hwAddr) {
+            wiFiDeviceListAdd(name, hwAddr[1], inetAddr);
+          }
+        }
+
         if (name == 'lo' || name.match('^docker') || name.match('^l4tbr')) continue;
 
-        let inetAddr = int.match(/inet \d+\.\d+\.\d+\.\d+/);
-        if (inetAddr == null) continue;
-        inetAddr = inetAddr[0].split(' ')[1]
+        if (!inetAddr) continue;
 
         let txBytes = int.match(/TX packets \d+  bytes \d+/);
         txBytes = parseInt(txBytes[0].split(' ').pop());
@@ -269,6 +282,12 @@ function updateNetif() {
 
     if (foundNewInt && isStreaming) {
       updateSrtlaIps();
+    }
+
+    if (wiFiDeviceListEndUpdate()) {
+      console.log("updated wifi devices");
+      // a delay seems to be needed before NM registers new devices
+      setTimeout(wifiUpdateDevices, 1000);
     }
   });
 }
@@ -303,273 +322,561 @@ function handleNetif(conn, msg) {
   conn.send(buildMsg('netif', netif));
 }
 
-/* Wifi */
-let wifiDeviceMACAddrs = {};
 
-// parses : separated values, with automatic \ escape detection and stripping
-function parseNmcliSep(value) {
-  return value.split(/(?<!\\):/).map(a => a.replace(/\\:/g, ':'));
+/*
+  WiFi device list / status maintained by periodic ifconfig updates
+
+  It tracks and detects changes by device name, physical (MAC) addresses and
+  IPv4 address. It allows us to only update the WiFi status via nmcli when
+  something has changed, because NM is very CPU / power intensive compared
+  to the periodic ifconfig polling that belaUI is already doing
+*/
+let wifiDeviceHwAddr = {};
+let wiFiDeviceListIsModified = false;
+let wiFiDeviceListIsUpdating = false;
+
+function wiFiDeviceListStartUpdate() {
+  if (wiFiDeviceListIsUpdating) {
+    throw "Called while an update was already in progress";
+  }
+
+  for (const i in wifiDeviceHwAddr) {
+    wifiDeviceHwAddr[i].removed = true;
+  }
+  wiFiDeviceListIsUpdating = true;
+  wiFiDeviceListIsModified = false
 }
 
-function getKnownWifiConnections() {
-  let connections;
-  try {
-    connections = execFileSync("nmcli", [
-      "--terse",
-      "--fields",
-      "uuid,type",
-      "connection",
-      "show",
-    ]).toString("utf-8").split("\n");
-  } catch (err) {
-    console.log(`Error getting the nmcli connection list: ${err.message}`);
-    return {};
+function wiFiDeviceListAdd(ifname, hwAddr, inetAddr) {
+  if (!wiFiDeviceListIsUpdating) {
+    throw "Called without starting an update";
   }
-  const knownNetworks = {};
 
-  for (const connection of connections) {
-    try {
-      const [uuid, type] = parseNmcliSep(connection);
+  if (wifiDeviceHwAddr[ifname]) {
+    if (wifiDeviceHwAddr[ifname].hwAddr != hwAddr) {
+      wifiDeviceHwAddr[ifname].hwAddr = hwAddr;
+      wiFiDeviceListIsModified = true;
+    }
+    if (wifiDeviceHwAddr[ifname].inetAddr != inetAddr) {
+      wifiDeviceHwAddr[ifname].inetAddr = inetAddr;
+      wiFiDeviceListIsModified = true;
+    }
+    wifiDeviceHwAddr[ifname].removed = false;
+  } else {
+    wifiDeviceHwAddr[ifname] = {
+      hwAddr,
+      inetAddr
+    };
+    wiFiDeviceListIsModified = true;
+  }
+}
 
-      if (type !== "802-11-wireless") continue;
+function wiFiDeviceListEndUpdate() {
+  if (!wiFiDeviceListIsUpdating) {
+    throw "Called without starting an update";
+  }
 
-      // Get the device the connection is bound to and the real ssid, since the connection name is prefixed.
-      const connectionInfo = execFileSync("nmcli", [
-        "--terse",
-        "--escape", "no",
-        "--get-values",
-        "802-11-wireless.ssid,802-11-wireless.mac-address",
-        "connection",
-        "show",
-        uuid,
-      ]).toString("utf-8").split("\n");
-
-      const device = wifiDeviceMACAddrs[connectionInfo[1].toLowerCase()];
-      const ssid = connectionInfo[0];
-
-      if (!device) continue;
-
-      if (!knownNetworks[device]) knownNetworks[device] = [];
-
-      knownNetworks[device].push({
-        uuid,
-        ssid,
-      });
-    }  catch (err) {
-      console.log(`Error getting the nmcli connection information: ${err.message}`);
+  for (const i in wifiDeviceHwAddr) {
+    if (wifiDeviceHwAddr[i].removed) {
+      delete wifiDeviceHwAddr[i];
+      wiFiDeviceListIsModified = true;
     }
   }
 
-  return knownNetworks;
+  wiFiDeviceListIsUpdating = false;
+  return wiFiDeviceListIsModified;
 }
 
-function getStatusWifiDevices() {
-  let networkDevices;
+function wifiDeviceListGetAddr(ifname) {
+  if (wifiDeviceHwAddr[ifname]) {
+    return wifiDeviceHwAddr[ifname].hwAddr;
+  }
+}
+
+
+/* NetworkManager / nmcli helpers */
+function nmConnsGet(fields) {
   try {
-    networkDevices = execFileSync("nmcli", [
+    const result = execFileSync("nmcli", [
       "--terse",
       "--fields",
-      "type,device,state,con-uuid",
+      fields,
+      "connection",
+      "show",
+    ]).toString("utf-8").split("\n");
+    return result;
+
+  } catch ({message}) {
+    console.log(`nmConnsGet err: ${message}`);
+  }
+}
+
+function nmConnGetFields(uuid, fields) {
+  try {
+    const result = execFileSync("nmcli", [
+      "--terse",
+      "--escape", "no",
+      "--get-values",
+      fields,
+      "connection",
+      "show",
+      uuid,
+    ]).toString("utf-8").split("\n");
+    return result;
+
+  } catch ({message}) {
+    console.log(`nmConnGetFields err: ${message}`);
+  }
+}
+
+function nmConnDelete(uuid, callback) {
+  execFile("nmcli", ["conn", "del", uuid], function (error, stdout, stderr) {
+    let success = true;
+    if (error || !stdout.match("successfully deleted")) {
+      console.log(`nmConnDelete err: ${stdout}`);
+      success = false;
+    }
+
+    if (callback) {
+      callback(success);
+    }
+  });
+}
+
+function nmConnect(uuid, callback) {
+  execFile("nmcli", ["conn", "up", uuid], function (error, stdout, stderr) {
+    let success = true;
+    if (error || !stdout.match("^Connection successfully activated")) {
+      console.log(`nmConnect err: ${stdout}`);
+      success = false;
+    }
+
+    if (callback) {
+      callback(success);
+    }
+  });
+}
+
+function nmDisconnect(uuid, callback) {
+  execFile("nmcli", ["conn", "down", uuid], function (error, stdout, stderr) {
+    let success = true;
+    if (error || !stdout.match("successfully deactivated")) {
+      console.log(`nmDisconnect err: ${stdout}`);
+      success = false;
+    }
+
+    if (callback) {
+      callback(success);
+    }
+  });
+}
+
+function nmDevices(fields) {
+  try {
+    const result = execFileSync("nmcli", [
+      "--terse",
+      "--fields",
+      fields,
       "device",
       "status",
     ]).toString("utf-8").split("\n");
-  } catch (err) {
-    console.log(`Error getting the nmcli device list: ${err.message}`);
-    return {};
+    return result;
+
+  } catch ({message}) {
+    console.log(`nmDevices err: ${message}`);
+  }
+}
+
+function nmRescan(device, callback) {
+  const args = ["device", "wifi", "rescan"];
+  if (device) {
+    args.push("ifname");
+    args.push(device);
+  }
+  execFile("nmcli", args, function (error, stdout, stderr) {
+    let success = true;
+    if (error || stdout != "") {
+      console.log(`nmRescan err: ${stdout}`);
+      success = false;
+    }
+
+    if (callback) {
+      callback(success);
+    }
+  });
+}
+
+function nmScanResults(fields) {
+  try {
+    const result = execFileSync("nmcli", [
+      "--terse",
+      "--fields",
+      fields,
+      "device",
+      "wifi",
+    ]).toString("utf-8").split("\n");
+    return result;
+
+  } catch ({message}) {
+    console.log(`nmScanResults err: ${message}`);
+  }
+}
+
+// parses : separated values, with automatic \ escape detection and stripping
+function nmcliParseSep(value) {
+  return value.split(/(?<!\\):/).map(a => a.replace(/\\:/g, ':'));
+}
+
+
+/*
+  NetworkManager / nmcli based Wifi Manager
+
+  Structs:
+
+  WiFi list <wifiIfs>:
+  {
+    'mac': <wd>
   }
 
-  const statusWifiDevices = {};
+  WiFi id to MAC address mapping <wifiIdToHwAddr>:
+  {
+    id: 'mac'
+  }
+
+  Wifi device <wd>:
+  {
+    'id', // numeric id for the adapter - temporary for each belaUI execution
+    'ifname': 'wlanX',
+    'conn': 'uuid' or undefined; // the active connection
+    'available': Map{<an>},
+    'saved': {<sn>}
+  }
+
+  Available network <an>:
+  {
+    active, // is it currently connected?
+    ssid,
+    signal: 0-100,
+    security,
+    freq
+  }
+
+  Saved networks {<sn>}:
+  {
+    ssid: uuid,
+  }
+*/
+let wifiIfId = 0;
+let wifiIfs = {};
+let wifiIdToHwAddr = {};
+
+/* Builds the WiFi status structure sent over the network from the <wd> structures */
+function wifiBuildMsg() {
+  const ifs = {};
+  for (const i in wifiIfs) {
+    const id = wifiIfs[i].id;
+    const s = wifiIfs[i];
+
+    ifs[id] = {
+      ifname: s.ifname,
+      conn: s.conn,
+      available: Array.from(s.available.values()),
+      saved: s.saved
+    };
+  }
+
+  return ifs;
+}
+
+function wifiBroadcastState() {
+  broadcastMsg('status', {wifi: wifiBuildMsg()});
+}
+
+
+function wifiUpdateSavedConns() {
+  let connections = nmConnsGet("uuid,type");
+  if (connections === undefined) return;
+
+  for (const i in wifiIfs) {
+    wifiIfs[i].saved = {};
+  }
+
+  for (const connection of connections) {
+    try {
+      const [uuid, type] = nmcliParseSep(connection);
+
+      if (type !== "802-11-wireless") continue;
+
+      // Get the device the connection is bound to and the ssid
+      const [ssid, macTmp] = nmConnGetFields(uuid, "802-11-wireless.ssid,802-11-wireless.mac-address");
+
+      if (!ssid || !macTmp) continue;
+
+      const macAddr = macTmp.toLowerCase();
+      if (wifiIfs[macAddr]) {
+        wifiIfs[macAddr].saved[ssid] = uuid;
+      }
+    } catch (err) {
+      console.log(`Error getting the nmcli connection information: ${err.message}`);
+    }
+  }
+}
+
+function wifiUpdateScanResult() {
+  const wifiNetworks = nmScanResults("active,ssid,signal,security,freq,device");
+  if (!wifiNetworks) return;
+
+  for (const i in wifiIfs) {
+    wifiIfs[i].available = new Map();
+  }
+
+  for (const wifiNetwork of wifiNetworks) {
+    const [active, ssid, signal, security, freq, device] =
+      nmcliParseSep(wifiNetwork);
+
+    if (ssid == null || ssid == "") continue;
+
+    const hwAddr = wifiDeviceListGetAddr(device);
+    if (!wifiIfs[hwAddr] || (active != 'yes' && wifiIfs[hwAddr].available.has(ssid))) continue;
+
+    wifiIfs[hwAddr].available.set(ssid, {
+      active: (active == 'yes'),
+      ssid,
+      signal: parseInt(signal),
+      security,
+      freq: parseInt(freq),
+    });
+  }
+
+  wifiBroadcastState();
+}
+
+/*
+  The WiFi scan results are updated some time after a rescan command is issued /
+  some time after a new WiFi adapter is plugged in.
+  This function sets up a number of timers to broadcast the updated scan results
+  with the expectation that eventually it will capture any relevant new results
+*/
+function wifiScheduleScanUpdates() {
+  setTimeout(wifiUpdateScanResult, 1000);
+  setTimeout(wifiUpdateScanResult, 3000);
+  setTimeout(wifiUpdateScanResult, 5000);
+  setTimeout(wifiUpdateScanResult, 10000);
+}
+
+function wifiUpdateDevices() {
+  let newDevices = false;
+  let statusChange = false;
+
+  let networkDevices = nmDevices("device,type,state,con-uuid");
+  if (!networkDevices) return;
+
+  // sorts the results alphabetically by interface name
+  networkDevices.sort();
+
+  // mark all WiFi adapters as removed
+  for (const i in wifiIfs) {
+    wifiIfs[i].removed = true;
+  }
+
+  // Rebuild the id-to-hwAddr map
+  wifiIdToHwAddr = {};
 
   for (const networkDevice of networkDevices) {
     try {
-      const [type, device, state, uuid] = parseNmcliSep(networkDevice);
+      const [ifname, type, state, connUuid] = nmcliParseSep(networkDevice);
+      const conn = (connUuid != '') ? connUuid : null;
 
       if (type !== "wifi" || state == "unavailable") continue;
 
-      const macAddr = execFileSync("nmcli", [
-        "--terse",
-        "--escape", "no",
-        "--get-values",
-        "general.hwaddr",
-        "device",
-        "show",
-        device
-      ]).toString("utf-8").trim().toLowerCase();
+      const hwAddr = wifiDeviceListGetAddr(ifname);
+      if (!hwAddr) continue;
 
-      wifiDeviceMACAddrs[macAddr] = device;
+      if (wifiIfs[hwAddr]) {
+        // the interface is still available
+        delete wifiIfs[hwAddr].removed;
 
-      statusWifiDevices[device] = {
-        state,
-        uuid,
-        ssid: ""
-      };
+        if (ifname != wifiIfs[hwAddr].ifname) {
+          wifiIfs[hwAddr].ifname = ifname;
+          statusChange = true;
+        }
+        if (conn != wifiIfs[hwAddr].conn) {
+          wifiIfs[hwAddr].conn = conn;
+          statusChange = true;
+        }
+      } else {
+        const id = wifiIfId++;
 
-      if (!uuid) continue;
-
-      const ssid = execFileSync("nmcli", [
-        "--terse",
-        "--escape", "no",
-        "--get-values",
-        "802-11-wireless.ssid",
-        "connection",
-        "show",
-        uuid,
-      ]).toString("utf-8").trim();
-
-      statusWifiDevices[device].ssid = ssid;
+        wifiIfs[hwAddr] = {
+          id,
+          ifname,
+          conn,
+          available: new Map(),
+          saved: {}
+        };
+        newDevices = true;
+        statusChange = true;
+      }
+      wifiIdToHwAddr[wifiIfs[hwAddr].id] = hwAddr;
     } catch (err) {
       console.log(`Error getting the nmcli WiFi device information: ${err.message}`);
     }
   }
 
-  return statusWifiDevices;
-}
-
-function getAvailableWifiNetworks() {
-  try {
-    const wifiNetworks = execFileSync("nmcli", [
-      "--terse",
-      "--fields",
-      "active,ssid,signal,bars,security,freq,bssid,device",
-      "device",
-      "wifi",
-    ]).toString("utf-8").split("\n");
-
-    const sortedWifiNetworks = {};
-
-    for (const wifiNetwork of wifiNetworks) {
-      const [active, ssid, signal, bars, security, freq, bssid, device] =
-        parseNmcliSep(wifiNetwork);
-
-      if (ssid == "" || ssid == null) continue;
-
-      if (!sortedWifiNetworks[device]) sortedWifiNetworks[device] = [];
-
-      sortedWifiNetworks[device].push({
-        active: active === "yes" ? true : false,
-        ssid,
-        signal: parseInt(signal),
-        bars,
-        security,
-        freq: parseInt(freq),
-        bssid,
-      });
+  // delete removed adapters
+  for (const i in wifiIfs) {
+    if (wifiIfs[i].removed) {
+      delete wifiIfs[i];
+      statusChange = true;
     }
-
-    return sortedWifiNetworks;
-  } catch ({ message }) {
-    console.log(message);
-    return {};
   }
+
+  if (newDevices) {
+    wifiUpdateSavedConns();
+    wifiScheduleScanUpdates();
+  }
+  if (statusChange) {
+    wifiUpdateScanResult();
+  }
+  if (newDevices || statusChange) {
+    wifiBroadcastState();
+  }
+  console.log(wifiIfs);
+
+  return statusChange;
 }
 
-function refreshWifiNetworks() {
-  broadcastMsg("wifidevices", getStatusWifiDevices());
-  broadcastMsg("wifinetworks", {
-    knownWifiConnections: getKnownWifiConnections(),
-    availableWifiNetworks: getAvailableWifiNetworks()
+function wifiRescan() {
+  nmRescan(undefined, function(success) {
+    /* A rescan request will fail if a previous one is in progress,
+       but we still attempt to update the results */
+    wifiUpdateScanResult();
+    wifiScheduleScanUpdates();
   });
 }
 
-function disconnectWifiDevice(device) {
-  try {
-    const disconnect = execFileSync("nmcli", [
-      "device",
-      "disconnect",
-      device,
-    ]).toString("utf-8");
-
-    console.log("[Wifi]", disconnect);
-  } catch ({ message }) {
-    console.log("[Wifi]", message);
+/* Searches saved connections in wifiIfs by UUID */
+function wifiSearchConnection(uuid) {
+  let connFound;
+  for (const i in wifiIdToHwAddr) {
+    const macAddr = wifiIdToHwAddr[i];
+    for (const s in wifiIfs[macAddr].saved) {
+      if (wifiIfs[macAddr].saved[s] == uuid) {
+        connFound = i;
+        break;
+      }
+    }
   }
 
-  refreshWifiNetworks();
+  return connFound;
 }
 
-function deleteKnownConnection(uuid) {
-  try {
-    const deleteCon = execFileSync("nmcli", [
-      "connection",
-      "delete",
-      "uuid",
-      uuid,
-    ]).toString("utf-8");
+function wifiDisconnect(uuid) {
+  if (wifiSearchConnection(uuid) === undefined) return;
 
-    console.log("[Wifi]", deleteCon);
-  } catch ({ message }) {
-    console.log("[Wifi]", message);
+  nmDisconnect(uuid, function(success) {
+    if (success) {
+      wifiUpdateScanResult();
+      wifiScheduleScanUpdates();
+    }
+  });
+}
+
+function wifiForget(uuid) {
+  if (wifiSearchConnection(uuid) === undefined) return;
+
+  nmConnDelete(uuid, function(success) {
+    if (success) {
+      wifiUpdateSavedConns();
+      wifiUpdateScanResult();
+      wifiScheduleScanUpdates();
+    }
+  });
+}
+
+function wifiDeleteFailedConns() {
+  const connections = nmConnsGet("uuid,type,timestamp");
+  for (const c in connections) {
+    const [uuid, type, ts] = nmcliParseSep(connections[c]);
+    if (type !== "802-11-wireless") continue;
+    if (ts == 0) {
+      nmConnDelete(uuid);
+    }
   }
-
-  refreshWifiNetworks();
 }
 
-function connectToNewNetwork(device, ssid, password) {
+function wifiNew(conn, msg) {
+  if (!msg.device || !msg.ssid) return;
+  if (!wifiIdToHwAddr[msg.device]) return;
+
+  const device = wifiIfs[wifiIdToHwAddr[msg.device]].ifname;
+
   const args = [
     "-w",
     "15",
     "device",
     "wifi",
     "connect",
-    ssid,
+    msg.ssid,
     "ifname",
     device
-  ]
+  ];
 
-  if (password) {
+  if (msg.password) {
     args.push('password');
-    args.push(password);
+    args.push(msg.password);
   }
 
-  try {
-    const connect = execFileSync("nmcli", args).toString("utf-8");
+  execFile("nmcli", args, function(error, stdout, stderr) {
+    if (error || stdout.match('^Error:')) {
+      wifiDeleteFailedConns();
 
-    console.log("[Wifi]", connect);
-  } catch ({ message }) {
-    console.log("[Wifi]", message);
-  }
+      if (stdout.match('Secrets were required, but not provided')) {
+        conn.send(buildMsg('wifi', {new: {error: "auth", device: msg.device}}, conn.senderId));
+      } else {
+        conn.send(buildMsg('wifi', {new: {error: "generic", device: msg.device}}, conn.senderId));
+      }
+    } else if (stdout.match('successfully activated')) {
+      wifiUpdateSavedConns();
+      wifiUpdateScanResult();
 
-  refreshWifiNetworks();
+      conn.send(buildMsg('wifi', {new: {success: true, device: msg.device}}, conn.senderId));
+    }
+  });
 }
 
-function connectToKnownNetwork(uuid) {
-  try {
-    const connect = execFileSync("nmcli", [
-      "connection",
-      "up",
-      uuid
-    ]).toString("utf-8");
+function wifiConnect(conn, uuid) {
+  const deviceId = wifiSearchConnection(uuid);
+  if (deviceId === undefined) return;
 
-    console.log("[Wifi]", connect);
-  } catch ({ message }) {
-    console.log("[Wifi]", message);
-  }
-
-  refreshWifiNetworks();
+  nmConnect(uuid, function(success) {
+    wifiUpdateScanResult();
+    conn.send(buildMsg('wifi', {connect: success, device: deviceId}, conn.senderId));
+  });
 }
 
-function handleWifiCommand(conn, type) {
-  switch (type.command) {
-    case "connectToNewNetwork":
-      connectToNewNetwork(type.device, type.ssid, type.password);
-      break;
-    case "connectToOpenNetwork":
-      connectToNewNetwork(type.device, type.ssid);
-      break;
-    case "connectToKnownNetwork":
-      connectToKnownNetwork(type.uuid);
-      break;
-    case "refreshNetworks":
-      refreshWifiNetworks();
-      break;
-    case "disconnectWifiDevice":
-      disconnectWifiDevice(type.device);
-      break;
-    case "deleteKnownConnection":
-      deleteKnownConnection(type.uuid)
-      break;
-  };
-};
+function handleWifi(conn, msg) {
+  for (const type in msg) {
+    switch(type) {
+      case 'connect':
+        wifiConnect(conn, msg[type]);
+        break;
+      case 'disconnect':
+        wifiDisconnect(msg[type]);
+        break;
+      case 'scan':
+        wifiRescan();
+        break;
+      case 'new':
+        wifiNew(conn, msg[type]);
+        break;
+      case 'forget':
+        wifiForget(msg[type]);
+        break;
+    }
+  }
+}
+
 
 /* Remote */
 const remoteProtocolVersion = 2;
@@ -969,11 +1276,10 @@ function genAuthToken(isPersistent) {
 function sendInitialStatus(conn) {
   conn.send(buildMsg('config', config));
   conn.send(buildMsg('pipelines', getPipelineList()));
-  conn.send(buildMsg('status', {is_streaming: isStreaming}));
+  conn.send(buildMsg('status', {is_streaming: isStreaming, wifi: wifiBuildMsg()}));
   conn.send(buildMsg('netif', netif));
   conn.send(buildMsg('sensors', sensors));
   conn.send(buildMsg('revisions', revisions));
-  conn.send(buildMsg('wifidevices', getStatusWifiDevices()));
 }
 
 function connAuth(conn, sendToken) {
@@ -1058,8 +1364,8 @@ function handleMessage(conn, msg, isRemote = false) {
       case 'netif':
         handleNetif(conn, msg[type]);
         break;
-      case 'wifiCommand':
-        handleWifiCommand(conn, msg[type]);
+      case 'wifi':
+        handleWifi(conn, msg[type]);
         break;
       case 'logout':
         if (conn.authToken) {
