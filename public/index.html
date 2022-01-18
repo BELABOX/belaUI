@@ -123,16 +123,54 @@
             <div class="modal-content">
 
               <div class="modal-header">
-                <h5 id="wifiModalTitle" class="modal-title"></h5>
+                <h5 class="modal-title">Connect to a new network</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                   <span aria-hidden="true">&times;</span>
                 </button>
-              </div>
-              <div id="wifiModalBody" class="modal-body"></div>
-              <div id="wifiModalFooter" class="modal-footer"></div>
-            </div>
-          </div>
-        </div>
+              </div> <!-- .modal-header -->
+
+              <form onsubmit="return wifiSendNewConnection();">
+                <input type="hidden" id="connection-device">
+
+                <div class="modal-body">
+                  <div class="form-group">
+                    <label for="connection-ssid" class="col-form-label">SSID</label>
+                    <input type="text" class="form-control" id="connection-ssid" readonly>
+                  </div> <!-- .form-group -->
+
+                  <div class="form-group">
+                    <label for="connection-password" class="col-form-label">Password</label>
+                    <div class="input-group">
+                      <input type="password" class="form-control" id="connection-password">
+                      <div class="input-group-append">
+                        <button class="btn btn-outline-secondary showHidePassword" type="button">Show</button>
+                      </div> <!-- .input-group-append -->
+                    </div> <!-- .input-group -->
+                  </div> <!-- .form-group -->
+
+                  <div id="wifiNewConnecting" class="wifi-new-status d-none text-info">
+                    <div class="spinner-border spinner-border-sm" role="status">
+                      <span class="sr-only">Loading...</span>
+                    </div>
+                    Connecting...
+                  </div>
+                  <div id="wifiNewErrAuth" class="wifi-new-status d-none text-danger">
+                    Authentication error. Check the password and try again
+                  </div>
+                  <div id="wifiNewErrGeneric" class="wifi-new-status d-none text-danger">
+                    Error connecting to the network. Move closer and try again
+                  </div>
+                </div> <!-- .modal-body -->
+
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                  <button id="wifiConnectButton" type="submit" class="btn btn-success">Connect</button>
+                </div> <!-- .modal-footer -->
+              </form>
+
+            </div> <!-- .modal-content -->
+          </div> <!-- .modal-dialog -->
+        </div> <!-- .modal -->
 
         <div id="wifi"></div>
 
