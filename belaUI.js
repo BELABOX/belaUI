@@ -1186,6 +1186,21 @@ if (setup['hw'] == 'jetson') {
 }
 
 
+/* Monitor the kernel log for undervoltage events */
+if (setup.hw == 'jetson') {
+  const dmesg = spawn("dmesg", ["-w"]);
+
+  dmesg.stdout.on('data', function(data) {
+    if (data.toString('utf8').match('soctherm: OC ALARM 0x00000001')) {
+      const msg = 'System undervoltage detected. ' +
+                  'You may experience system instability, ' +
+                  'including glitching, freezes and the modems disconnecting';
+      notificationBroadcast('jetson_undervoltage', 'error', msg, 10*60, true, false);
+    }
+  });
+}
+
+
 function startError(conn, msg, id = undefined) {
   const originalId = conn.senderId;
   if (id !== undefined) {
