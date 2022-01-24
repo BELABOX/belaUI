@@ -26,6 +26,7 @@ const path = require('path');
 const dns = require('dns');
 const bcrypt = require('bcrypt');
 const process = require('process');
+const util = require('util');
 
 const SETUP_FILE = 'setup.json';
 const CONFIG_FILE = 'config.json';
@@ -165,6 +166,13 @@ const oneDay = 24 * oneHour;
 function getms() {
   const [sec, ns] = process.hrtime();
   return sec * 1000 + Math.floor(ns / 1000 / 1000);
+}
+
+async function readTextFile(file) {
+  const readFile = util.promisify(fs.readFile);
+  const contents = await readFile(file).catch(function(err) {return undefined});
+  if (contents === undefined) return;
+  return contents.toString('utf8');
 }
 
 
@@ -1199,6 +1207,51 @@ if (setup.hw == 'jetson') {
     }
   });
 }
+
+
+/* Check if there are any Cam Links plugged into a USB2 port */
+async function checkCamlinkUsb2() {
+  const readdir = util.promisify(fs.readdir);
+
+  const deviceDir = '/sys/bus/usb/devices';
+  const devices = await readdir(deviceDir);
+  let foundUsb2 = false;
+
+  for (const d of devices) {
+    try {
+      const vendor = await readTextFile(`${deviceDir}/${d}/idVendor`);
+      if (vendor != "0fd9\n") continue;
+
+      /*
+        With my unit it would appear that product ID 0x66 is used for USB3.0 and
+        0x67 is used for USB2.0, but I'm not sure if this is consistent between
+        different revisions. So we'll check bcdUSB (aka version) for both
+      */
+      const product = await readTextFile(`${deviceDir}/${d}/idProduct`);
+      if (product != "0066\n" && product != "0067\n") continue;
+
+      const version = await readTextFile(`${deviceDir}/${d}/version`);
+      if (!version.match('3.00')) {
+        foundUsb2 = true;
+      }
+    } catch(err) {}
+  }
+
+  if (foundUsb2) {
+    const msg = "Detected a Cam Link 4K connected via USB2. This will result in low framerate operation. Ensure that it's connected to a USB3.0 port and that you're using a USB3.0 extension cable.";
+    notificationBroadcast('camlink_usb2', 'error', msg, 0, true, false);
+    console.log('Detected a Cam Link 4K connected via USB2.0');
+  } else {
+    notificationRemove('camlink_usb2');
+    console.log('No Cam Link 4K connected via USB2.0');
+  }
+}
+
+// We use an UDEV rule to send a SIGUSR2 when an Elgato USB device is plugged in or out
+process.on('SIGUSR2', checkCamlinkUsb2);
+
+// check for Cam Links on USB2 at startup
+checkCamlinkUsb2();
 
 
 function startError(conn, msg, id = undefined) {

@@ -1,0 +1,1 @@
+ENV{DEVTYPE}=="usb_device", ENV{ID_VENDOR_ID}=="0fd9", RUN+="/usr/bin/pkill -o -SIGUSR2 -f belaUI.js"
