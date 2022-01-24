@@ -1374,13 +1374,22 @@ function updateSrtlaIps() {
   spawnSync("killall", ['-HUP', "srtla_send"], { detached: true});
 }
 
-function spawnStreamingLoop(command, args, cooldown = 100) {
+function spawnStreamingLoop(command, args, cooldown = 100, errCallback) {
   if (!isStreaming) return;
 
-  const process = spawn(command, args, { stdio: 'inherit' });
+  const process = spawn(command, args, { stdio: ['inherit', 'inherit', 'pipe'] });
+
+  if (errCallback) {
+    process.stderr.on('data', function(data) {
+      data = data.toString('utf8');
+      console.log(data);
+      errCallback(data);
+    });
+  }
+
   process.on('exit', function(code) {
     setTimeout(function() {
-      spawnStreamingLoop(command, args, cooldown);
+      spawnStreamingLoop(command, args, cooldown, errCallback);
     }, cooldown);
   })
 }
@@ -1404,7 +1413,15 @@ function start(conn, params) {
                          config.srtla_addr,
                          config.srtla_port,
                          setup.ips_file
-                       ]);
+                       ], 100, function(err) {
+      let msg;
+      if (err.match('Failed to establish any initial connections')) {
+        msg = 'Failed to connect to the SRTLA server. Retrying...';
+      }
+      if (msg) {
+        notificationBroadcast('srtla', 'error', msg, duration = 5, isPersistent = true, isDismissable = false);
+      }
+    });
 
     const belacoderArgs = [
                             pipeline,
@@ -1418,7 +1435,23 @@ function start(conn, params) {
       belacoderArgs.push('-s');
       belacoderArgs.push(config.srt_streamid);
     }
-    spawnStreamingLoop(belacoderExec, belacoderArgs, 2000);
+    spawnStreamingLoop(belacoderExec, belacoderArgs, 2000, function(err) {
+      let msg;
+      if (err.match('gstreamer error from alsasrc0')) {
+        msg = 'Capture card error (audio). Trying to restart...';
+      } else if (err.match('gstreamer error from v4l2src0')) {
+        msg = 'Capture card error (video). Trying to restart...';
+      } else if (err.match('Pipeline stall detected')) {
+        msg = 'The input source has stalled. Trying to restart...';
+      } else if (err.match('Failed to establish an SRT connection')) {
+        if (!notificationExists('srtla')) {
+          msg = 'Failed to connect to the SRT server. Retrying...';
+        }
+      }
+      if (msg) {
+        notificationBroadcast('belacoder', 'error', msg, duration = 5, isPersistent = true, isDismissable = false);
+      }
+    });
 
     updateStatus(true);
   });
