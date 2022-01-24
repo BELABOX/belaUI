@@ -899,7 +899,16 @@ function handleWifi(conn, msg) {
 
 
 /* Remote */
-const remoteProtocolVersion = 4;
+/*
+  A brief remote protocol version history:
+  1 - initial remote release
+  2 - belaUI password setting feature
+  3 - apt update feature
+  4 - ssh manager
+  5 - wifi manager
+  6 - notification sytem
+*/
+const remoteProtocolVersion = 6;
 const remoteEndpoint = 'wss://remote.belabox.net/ws/remote';
 const remoteTimeout = 5000;
 const remoteConnectTimeout = 10000;
@@ -1029,6 +1038,119 @@ function setRemoteKey(key) {
   remoteConnect();
 
   broadcastMsg('config', config);
+}
+
+
+/* Notification system */
+/*
+  conn - send it to a specific client, or undefined to broadcast
+  name - identifier for the notification, e.g. 'belacoder'
+  type - 'success', 'warning', 'error'
+  msg - the human readable notification message
+  duration - 0-never expires
+             or number of seconds until the notification expires
+             * an expired notification is hidden by the UI and removed from persistent notifications
+  isPersistent - show it to every new client, conn must be undefined for broadcast
+  isDismissable - is the user allowed to hide it?
+*/
+let persistentNotifications = new Map();
+
+function notificationSend(conn, name, type, msg, duration = 0, isPersistent = false, isDismissable = true) {
+  if (isPersistent && conn != undefined) {
+    console.log("error: attempted to send persistent unicast notification");
+    return false;
+  }
+
+  const notification = {
+                         name,
+                         type,
+                         msg,
+                         is_dismissable: isDismissable,
+                         is_persistent: isPersistent,
+                         duration
+                       };
+  let doSend = true;
+  if (isPersistent) {
+    let pn = persistentNotifications.get(name);
+    if (pn) {
+      // Rate limiting to once every second
+      if (pn.last_sent && ((pn.last_sent + 1000) > getms())) {
+        doSend = false;
+      }
+    } else {
+      pn = {};
+      persistentNotifications.set(name, pn)
+    }
+
+    Object.assign(pn, notification);
+    pn.updated = getms();
+
+    if (doSend) {
+      pn.last_sent = getms();
+    }
+  }
+
+  if (!doSend) return;
+
+  const notificationMsg = {
+                            show: [notification]
+                          };
+  if (conn) {
+    conn.send(buildMsg('notification', notificationMsg, conn.senderId));
+  } else {
+    broadcastMsg('notification', notificationMsg);
+  }
+
+  return true;
+}
+
+function notificationBroadcast(name, type, msg, duration = 0, isPersistent = false, isDismissable = true) {
+  notificationSend(undefined, name, type, msg, duration, isPersistent, isDismissable);
+}
+
+function notificationRemove(name) {
+  persistentNotifications.delete(name);
+
+  const msg = { remove: [name] };
+  broadcastMsg('notification', msg);
+}
+
+function _notificationIsLive(n) {
+  if (n.duration === 0) return 0;
+
+  const remainingDuration = Math.ceil(n.duration - (getms() - n.updated) / 1000);
+  if (remainingDuration <= 0) {
+    persistentNotifications.delete(n.name);
+    return false;
+  }
+  return remainingDuration;
+}
+
+function notificationExists(name) {
+  let pn = persistentNotifications.get(name);
+  if (!pn) return;
+
+  if (_notificationIsLive(pn) !== false) return pn;
+}
+
+function notificationSendPersistent(conn) {
+  const notifications = [];
+  for (const n of persistentNotifications) {
+    const remainingDuration = _notificationIsLive(n[1]);
+    if (remainingDuration !== false) {
+      notifications.push({
+        name: n[1].name,
+        type: n[1].type,
+        msg: n[1].msg,
+        is_dismissable: n[1].is_dismissable,
+        is_persistent: n[1].is_persistent,
+        duration: remainingDuration
+      });
+    }
+  }
+
+  const msg = { show: notifications };
+  conn.send(buildMsg('notification', msg));
 }
 
 
@@ -1576,6 +1698,7 @@ function sendInitialStatus(conn) {
   conn.send(buildMsg('netif', netif));
   conn.send(buildMsg('sensors', sensors));
   conn.send(buildMsg('revisions', revisions));
+  notificationSendPersistent(conn);
 }
 
 function connAuth(conn, sendToken) {

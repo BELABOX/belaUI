@@ -81,6 +81,7 @@ function handleAuthResult(msg) {
     $('#initialPasswordForm').addClass('d-none');
     $('#main').removeClass('d-none');
     hideError();
+    removeNotification('auth');
   } else if (!isShowingInitialPasswordForm) {
     showLoginForm();
   }
@@ -777,6 +778,88 @@ function hideError() {
 }
 
 
+/* Notifications */
+function notificationId(name) {
+  return `notification-${name}`;
+}
+
+function showNotification(n) {
+  if (!n.name || !n.type || !n.msg) return;
+  const alertId = notificationId(n.name);
+
+  let alert = $(`#${alertId}`);
+  if (alert.length == 0) {
+    const html = `
+      <div class="alert mb-2">
+        <span class="msg"></span>
+        <button type="button" class="close d-none" data-dismiss="alert" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>`;
+    alert = $($.parseHTML(html));
+
+    alert.attr('id', alertId);
+    if (n.is_dismissable) {
+      alert.addClass('alert-dismissible');
+      alert.find('button').removeClass('d-none');
+    }
+
+    alert.appendTo('#notifications');
+  } else {
+    alert.removeClass(['alert-secondary', 'alert-danger', 'alert-warning', 'alert-success']);
+    const t = alert.data('timerHide');
+    if (t) {
+      clearTimeout(t);
+    }
+  }
+
+  let colorClass = 'alert-secondary'
+  switch(n.type) {
+    case 'error':
+      alert.addClass(`alert-danger`);
+      break;
+    case 'warning':
+    case 'success':
+      alert.addClass(`alert-${n.type}`);
+      break;
+  }
+  alert.addClass(colorClass);
+
+  alert.find('span.msg').text(n.msg);
+
+  if (n.duration) {
+    alert.data('timerHide', setTimeout(function() {
+      alert.slideUp(300, function() {
+        $(this).remove();
+      });
+    }, n.duration * 1000));
+  }
+
+  $('html, body').animate({
+    scrollTop: 0,
+    scrollLeft: 0
+  }, 200);
+}
+
+function removeNotification(name) {
+  const alertId = notificationId(name);
+  $(`#${alertId}`).remove();
+}
+
+function handleNotification(msg) {
+  if (msg.show) {
+    for (const n of msg.show) {
+      showNotification(n);
+    }
+  }
+  if (msg.remove) {
+    for (const n of msg.remove) {
+      removeNotification(n);
+    }
+  }
+}
+
+
 /* Handle server-to-client messages */
 function handleMessage(msg) {
   console.log(msg);
@@ -811,6 +894,9 @@ function handleMessage(msg) {
         break;
       case 'error':
         showError(msg[type].msg);
+        break;
+      case 'notification':
+        handleNotification(msg[type]);
         break;
     }
   }
