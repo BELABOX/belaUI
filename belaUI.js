@@ -328,7 +328,7 @@ function handleNetif(conn, msg) {
 
   if (msg['enabled'] === true || msg['enabled'] === false) {
     if (!msg['enabled'] && int.enabled && countActiveNetif() == 1) {
-      sendError(conn, "Can't disable all networks");
+      notificationSend(conn, "netif_disable_all", "error", "Can't disable all networks", 10);
     } else {
       int.enabled = msg['enabled'];
       if (isStreaming) {
@@ -1186,14 +1186,17 @@ if (setup['hw'] == 'jetson') {
 }
 
 
-/* Websocket packet handlers */
-function sendError(conn, msg, id = undefined) {
-  if (id === undefined) id = conn.senderId;
-  conn.send(buildMsg('error', {msg: msg}, id));
-}
-
 function startError(conn, msg, id = undefined) {
-  sendError(conn, msg, id);
+  const originalId = conn.senderId;
+  if (id !== undefined) {
+    conn.senderId = id;
+  }
+
+  notificationSend(conn, "start_error", "error", msg, 10);
+
+  if (id !== undefined) {
+    conn.senderId = originalId;
+  }
   conn.send(buildMsg('status', {is_streaming: false}));
   return false;
 }
@@ -1645,7 +1648,8 @@ function resetSshPassword(conn) {
   const cmd = `printf "${password}\n${password}" | passwd ${setup.ssh_user}`;
   exec(cmd, function(err, stdout, stderr) {
     if (err) {
-      sendError(conn, `Failed to reset the SSH password for ${setup.ssh_user}`);
+      notificationSend(conn, "ssh_pass_reset", "error",
+                       `Failed to reset the SSH password for ${setup.ssh_user}`, 10);
       return;
     }
     getSshUserHash(function(hash) {
@@ -1663,7 +1667,8 @@ function setPassword(conn, password, isRemote) {
   if (conn.isAuthed || (!isRemote && !config.password_hash)) {
     const minLen = 8;
     if (password.length < minLen) {
-      sendError(conn, `Minimum password length: ${minLen} characters`);
+      notificationSend(conn, "belaui_pass_length", "error",
+                       `Minimum password length: ${minLen} characters`, 10);
       return;
     }
     config.password_hash = bcrypt.hashSync(password, BCRYPT_ROUNDS);
@@ -1723,7 +1728,7 @@ function tryAuth(conn, msg) {
         conn.authToken = genAuthToken(msg.persistent_token);
         connAuth(conn, conn.authToken);
       } else {
-        sendError(conn, "Invalid password");
+        notificationSend(conn, "auth", "error", "Invalid password");
       }
     });
   } else if (typeof(msg.token) == 'string') {
