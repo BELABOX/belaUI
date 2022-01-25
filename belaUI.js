@@ -286,6 +286,9 @@ function updateNetif() {
 
         if (!inetAddr) continue;
 
+        const flags = int.match(/flags=\d+<([A-Z,]+)>/)[1].split(',');
+        if (!flags.includes('RUNNING')) continue;
+
         let txBytes = int.match(/TX packets \d+  bytes \d+/);
         txBytes = parseInt(txBytes[0].split(' ').pop());
         if (netif[name]) {
