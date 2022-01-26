@@ -175,6 +175,12 @@ async function readTextFile(file) {
   return contents.toString('utf8');
 }
 
+async function writeTextFile(file, contents) {
+  const writeFile = util.promisify(fs.writeFile);
+  await writeFile(file, contents).catch(function() {return false});
+  return true;
+}
+
 
 /* WS helpers */
 function buildMsg(type, data, id = undefined) {
@@ -918,8 +924,9 @@ function handleWifi(conn, msg) {
   4 - ssh manager
   5 - wifi manager
   6 - notification sytem
+  7 - support for config.bitrate_overlay
 */
-const remoteProtocolVersion = 6;
+const remoteProtocolVersion = 7;
 const remoteEndpoint = 'wss://remote.belabox.net/ws/remote';
 const remoteTimeout = 5000;
 const remoteConnectTimeout = 10000;
@@ -1289,7 +1296,18 @@ function setBitrate(params) {
   return config.max_br;
 }
 
-function updateConfig(conn, params, callback) {
+async function removeBitrateOverlay(pipelineFile) {
+  let pipeline = await readTextFile(pipelineFile);
+  if (!pipeline) return;
+
+  pipeline = pipeline.replace(/textoverlay[^!]*name=overlay[^!]*!/g, '');
+  const pipelineTmp = "/tmp/belacoder_pipeline";
+  if (!writeTextFile(pipelineTmp, pipeline)) return;
+
+  return pipelineTmp;
+}
+
+async function updateConfig(conn, params, callback) {
   // delay
   if (params.delay == undefined)
     return startError(conn, "audio delay not specified");
@@ -1302,6 +1320,12 @@ function updateConfig(conn, params, callback) {
   let pipeline = searchPipelines(params.pipeline);
   if (pipeline == null)
     return startError(conn, "pipeline not found");
+
+  // remove the bitrate overlay unless enabled in the config
+  if (!params.bitrate_overlay) {
+    pipeline = await removeBitrateOverlay(pipeline);
+    if (!pipeline) return startError(conn, "failed to generate the pipeline file");
+  }
 
   // bitrate
   let bitrate = setBitrate(params);
@@ -1337,6 +1361,7 @@ function updateConfig(conn, params, callback) {
       config.srt_streamid = params.srt_streamid;
       config.srtla_addr = params.srtla_addr;
       config.srtla_port = params.srtla_port;
+      config.bitrate_overlay = params.bitrate_overlay;
 
       saveConfig();
 

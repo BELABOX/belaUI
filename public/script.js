@@ -374,6 +374,7 @@ function loadConfig(c) {
 
   $('#remoteDeviceKey').val(config.remote_key);
   $('#remoteKeyForm button[type=submit]').prop('disabled', true);
+  $("#bitrateOverlay").prop('checked', config.bitrate_overlay)
 
   if (config.ssh_pass && sshStatus) {
     showSshStatus();
@@ -915,6 +916,7 @@ function getConfig() {
   config.srtla_port = document.getElementById("srtlaPort").value;
   config.srt_streamid = document.getElementById("srtStreamid").value;
   config.srt_latency = $("#srtLatencySlider").slider("value");
+  config.bitrate_overlay = $("#bitrateOverlay").prop('checked');
 
   return config;
 }
