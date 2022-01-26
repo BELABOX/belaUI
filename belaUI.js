@@ -148,7 +148,6 @@ wss.on('connection', function connection(conn) {
   }
 
   conn.on('message', function incoming(msg) {
-    console.log(msg);
     try {
       msg = JSON.parse(msg);
       handleMessage(conn, msg);
@@ -1881,6 +1880,8 @@ function tryAuth(conn, msg) {
 
 
 function handleMessage(conn, msg, isRemote = false) {
+  console.log(msg);
+
   if (!isRemote) {
     for (const type in msg) {
       switch(type) {
