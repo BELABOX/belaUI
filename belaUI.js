@@ -1377,10 +1377,12 @@ function updateSrtlaIps() {
   spawnSync("killall", ['-HUP', "srtla_send"], { detached: true});
 }
 
+let streamingProcesses = [];
 function spawnStreamingLoop(command, args, cooldown = 100, errCallback) {
   if (!isStreaming) return;
 
   const process = spawn(command, args, { stdio: ['inherit', 'inherit', 'pipe'] });
+  streamingProcesses.push(process);
 
   if (errCallback) {
     process.stderr.on('data', function(data) {
@@ -1462,6 +1464,13 @@ function start(conn, params) {
 
 function stop() {
   updateStatus(false);
+
+  // Remove the exit handlers which would restart the processes
+  for (const p of streamingProcesses) {
+    p.removeAllListeners('exit');
+  }
+  streamingProcesses = [];
+
   spawnSync("killall", ["srtla_send"], {detached: true});
   spawnSync("killall", ["belacoder"], {detached: true});
 }
