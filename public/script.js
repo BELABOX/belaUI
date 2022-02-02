@@ -79,9 +79,9 @@ function handleAuthResult(msg) {
     }
     $('#login').addClass('d-none');
     $('#initialPasswordForm').addClass('d-none');
-    $('#main').removeClass('d-none');
     hideError();
-    removeNotification('auth');
+    $('#notifications').empty();
+    $('#main').removeClass('d-none');
   } else if (!isShowingInitialPasswordForm) {
     showLoginForm();
   }
