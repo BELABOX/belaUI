@@ -159,7 +159,8 @@ wss.on('connection', function connection(conn) {
 
 
 /* Misc helpers */
-const oneHour = 3600 * 1000;
+const oneMinute = 60 * 1000;
+const oneHour = 60 * oneMinute;
 const oneDay = 24 * oneHour;
 
 function getms() {
@@ -1516,7 +1517,7 @@ function command(conn, cmd) {
       spawnSync("reboot", {detached: true});
       break;
     case 'update':
-      doSoftwareUpdate();
+      startSoftwareUpdate();
       break;
     case 'start_ssh':
     case 'stop_ssh':
@@ -1553,7 +1554,8 @@ function handleConfig(conn, msg, isRemote) {
 /* Software updates */
 let availableUpdates = setup.apt_update_enabled ? null : false;
 let softUpdateStatus = null;
-let lastAptUpdate;
+let aptGetUpdating = false;
+let aptGetUpdateFailures = 0;
 
 function isUpdating() {
   return (softUpdateStatus != null);
@@ -1581,7 +1583,7 @@ function parseUpgradeDownloadSize(text) {
 }
 
 function getSoftwareUpdateSize() {
-  if (isStreaming || isUpdating()) return;
+  if (isStreaming || isUpdating() || aptGetUpdating) return;
 
   exec("apt-get dist-upgrade --assume-no", function(err, stdout, stderr) {
     console.log(stdout);
@@ -1605,37 +1607,68 @@ function getSoftwareUpdateSize() {
   });
 }
 
-function checkForSoftwareUpdates() {
-  if (isStreaming || isUpdating()) return;
+function checkForSoftwareUpdates(callback) {
+  if (isStreaming || isUpdating() || aptGetUpdating) return;
 
-  if (lastAptUpdate && (lastAptUpdate + oneDay) < getms()) return;
-
+  aptGetUpdating = true;
   exec("apt-get update --allow-releaseinfo-change", function(err, stdout, stderr) {
+    aptGetUpdating = false;
+
+    if (stderr.length) err = true;
     console.log(`apt-get update: ${(err === null) ? 'success' : 'error'}`);
     console.log(stdout);
     console.log(stderr);
 
     if (err === null) {
-      lastAptUpdate = getms();
-      getSoftwareUpdateSize();
+      aptGetUpdateFailures = 0;
     } else {
-      setTimeout(checkForSoftwareUpdates, oneHour);
+      aptGetUpdateFailures++;
     }
+    if (callback) callback(err, aptGetUpdateFailures);
+  });
+}
+
+function periodicCheckForSoftwareUpdates() {
+  checkForSoftwareUpdates(function(err, failures) {
+    if (err === null) {
+      getSoftwareUpdateSize();
+    }
+    const interval = (err === null) ? oneDay : ((failures > 3) ? oneHour : oneMinute);
+    setTimeout(periodicCheckForSoftwareUpdates, interval);
   });
 }
 if (setup.apt_update_enabled) {
-  checkForSoftwareUpdates();
-  setInterval(checkForSoftwareUpdates, oneHour);
+  periodicCheckForSoftwareUpdates();
+}
+
+function startSoftwareUpdate() {
+  if (!setup.apt_update_enabled || isStreaming || isUpdating()) return;
+
+  // if an apt-get update is already in progress, retry later
+  if (aptGetUpdating) {
+    setTimeout(startSoftwareUpdate, 3 * 1000);
+    return;
+  }
+
+  checkForSoftwareUpdates(function(err) {
+    if (err === null) {
+      doSoftwareUpdate();
+    } else {
+      softUpdateStatus.result = "Failed to fetch the updated package list; aborting the update.";
+      broadcastMsg('status', {updating: softUpdateStatus});
+      softUpdateStatus = null;
+    }
+  });
+
+  softUpdateStatus = {downloading: 0, unpacking: 0, setting_up: 0, total: 0};
+  broadcastMsg('status', {updating: softUpdateStatus});
 }
 
 function doSoftwareUpdate() {
-  if (!setup.apt_update_enabled || isStreaming || isUpdating()) return;
+  if (!setup.apt_update_enabled || isStreaming) return;
 
   let aptLog = '';
   let aptErr = '';
-  softUpdateStatus = {downloading: 0, unpacking: 0, setting_up: 0, total: 0};
-
-  broadcastMsg('status', {updating: softUpdateStatus});
 
   const args = "-y -o \"Dpkg::Options::=--force-confdef\" -o \"Dpkg::Options::=--force-confold\" dist-upgrade".split(' ');
   const aptUpgrade = spawn("apt-get", args);
