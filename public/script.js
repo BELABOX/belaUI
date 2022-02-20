@@ -1080,7 +1080,7 @@ function showInitialPasswordForm() {
 function checkPassword() {
   const form = $(this).parents('form');
 
-  const p = $(form).find('input[type=password]').val();
+  const p = $(this).val();
   let isValid = false;
 
   if (p.length < 8) {
@@ -1095,7 +1095,7 @@ function checkPassword() {
 $('.set-password').on('input', checkPassword);
 
 function sendPasswordFromInput(form) {
-  const passwordInput = $(form).find('input[type=password]');
+  const passwordInput = $(form).find('input.set-password');
   const password = passwordInput.val();
 
   passwordInput.val('');
