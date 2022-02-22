@@ -699,9 +699,11 @@ function wifiScheduleScanUpdates() {
   setTimeout(wifiUpdateScanResult, 10000);
 }
 
+let unavailableDeviceRetryExpiry = 0;
 function wifiUpdateDevices() {
   let newDevices = false;
   let statusChange = false;
+  let unavailableDevices = false;
 
   let networkDevices = nmDevices("device,type,state,con-uuid");
   if (!networkDevices) return;
@@ -722,7 +724,11 @@ function wifiUpdateDevices() {
       const [ifname, type, state, connUuid] = nmcliParseSep(networkDevice);
       const conn = (connUuid != '') ? connUuid : null;
 
-      if (type !== "wifi" || state == "unavailable") continue;
+      if (type !== "wifi") continue;
+      if (state == "unavailable") {
+        unavailableDevices = true;
+        continue;
+      }
 
       const hwAddr = wifiDeviceListGetAddr(ifname);
       if (!hwAddr) continue;
@@ -777,6 +783,23 @@ function wifiUpdateDevices() {
     wifiBroadcastState();
   }
   console.log(wifiIfs);
+
+  /* If some wifi adapters were marked unavailable, recheck periodically
+     This might happen when the system has just booted up and the adapter
+     typically becomes available within 30 seconds.
+     Uses a 5 minute timeout to avoid polling nmcli forever */
+  if (unavailableDevices) {
+    if (unavailableDeviceRetryExpiry == 0) {
+      unavailableDeviceRetryExpiry = getms() + 5 * 60 * 1000; // 5 minute timeout
+      setTimeout(wifiUpdateDevices, 3000);
+      console.log("One or more Wifi interfaces are unavailable. Will retry periodically for the next 5 minutes");
+    } else if (getms() < unavailableDeviceRetryExpiry) {
+      setTimeout(wifiUpdateDevices, 3000);
+      console.log("One or more Wifi interfaces are still unavailable. Retrying in 3 seconds...");
+    }
+  } else {
+    unavailableDeviceRetryExpiry = 0;
+  }
 
   return statusChange;
 }
