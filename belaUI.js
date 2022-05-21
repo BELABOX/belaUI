@@ -369,10 +369,6 @@ function updateNetif() {
       }
     }
 
-    if (intsChanged && isStreaming) {
-      updateSrtlaIps();
-    }
-
     if (wiFiDeviceListEndUpdate()) {
       console.log("updated wifi devices");
       // a delay seems to be needed before NM registers new devices
@@ -380,6 +376,11 @@ function updateNetif() {
     }
 
     netif = newints;
+
+    if (intsChanged && isStreaming) {
+      updateSrtlaIps();
+    }
+
     broadcastMsg('netif', netif, getms() - ACTIVE_TO);
   });
 }
