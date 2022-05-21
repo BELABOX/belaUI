@@ -1010,6 +1010,12 @@ function initDelaySlider(defaultDelay) {
 
 function showSrtLatency(value) {
   document.getElementById("srtLatencyValue").value = `SRT latency: ${value} ms`;
+
+  if (value < 1500) {
+    $('#latencyWarning').removeClass('d-none');
+  } else {
+    $('#latencyWarning').addClass('d-none');
+  }
 }
 
 function initSrtLatencySlider(defaultLatency) {
