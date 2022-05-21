@@ -104,7 +104,7 @@ function setNetif(name, ip, enabled) {
   ws.send(JSON.stringify({'netif': {'name': name, 'ip': ip, 'enabled': enabled}}));
 }
 
-function genNetifEntry(enabled, name, ip, throughput, isBold = false) {
+function genNetifEntry(error, enabled, name, ip, throughput, isBold = false) {
   let checkbox = '';
   if (enabled != undefined) {
     const esc_name = name.replaceAll("'", "\\'");
@@ -126,6 +126,11 @@ function genNetifEntry(enabled, name, ip, throughput, isBold = false) {
   entry.find('.netif_name').text(name);
   entry.find('.netif_ip').text(ip);
   entry.find('.netif_tp').text(throughput);
+  if (error) {
+    const cb = entry.find('input');
+    cb.attr('disabled', true);
+    cb.attr('title', `Can't enable: ${error}`);
+  }
 
   return entry;
 }
@@ -139,11 +144,11 @@ function updateNetif(netifs) {
     tpKbps = Math.round((data['tp'] * 8) / 1024);
     totalKbps += tpKbps;
 
-    modemList.push(genNetifEntry(data.enabled, i, data.ip, `${tpKbps} Kbps`));
+    modemList.push(genNetifEntry(data.error, data.enabled, i, data.ip, `${tpKbps} Kbps`));
   }
 
   if (Object.keys(netifs).length > 1) {
-    modemList.push(genNetifEntry(undefined, '', '', `${totalKbps} Kbps`, true));
+    modemList.push(genNetifEntry(undefined, undefined, '', '', `${totalKbps} Kbps`, true));
   }
 
   $('#modems').html(modemList);

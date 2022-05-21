@@ -260,6 +260,15 @@ function getPipelineList() {
 /* Network interface list */
 let netif = {};
 
+function setNetifError(int, err) {
+  int.enabled = false;
+  int.error = err;
+}
+
+function setNetifDup(int) {
+  setNetifError(int, 'duplicate IP addr');
+}
+
 function updateNetif() {
   exec("ifconfig", (error, stdout, stderr) => {
     if (error) {
@@ -267,7 +276,7 @@ function updateNetif() {
       return;
     }
 
-    let foundNewInt = false;
+    let intsChanged = false;
     const newints = {};
 
     wiFiDeviceListStartUpdate();
@@ -304,18 +313,63 @@ function updateNetif() {
         }
 
         const enabled = (netif[name] && netif[name].enabled == false) ? false : true;
-        newints[name] = {ip: inetAddr, txb: txBytes, tp, enabled};
+        const error = netif[name] ? netif[name].error : undefined;
+        newints[name] = {ip: inetAddr, txb: txBytes, tp, enabled, error};
 
+        // Detect interfaces that are new or with a different address
         if (!netif[name] || netif[name].ip != inetAddr) {
-          foundNewInt = true;
+          intsChanged = true;
         }
       } catch (err) {};
     }
-    netif = newints;
 
-    broadcastMsg('netif', netif, getms() - ACTIVE_TO);
+    // Detect removed interfaces
+    for (const i in netif) {
+      if (!newints[i]) {
+        intsChanged = true;
+      }
+    }
 
-    if (foundNewInt && isStreaming) {
+    if (intsChanged) {
+      const intAddrs = {};
+
+      // Detect duplicate IP adddresses and set error status
+      for (const i in newints) {
+        const int = newints[i];
+        delete int.error;
+
+        if (intAddrs[int.ip] === undefined) {
+          intAddrs[int.ip] = i;
+        } else {
+          if (Array.isArray(intAddrs[int.ip])) {
+            intAddrs[int.ip].push(i);
+          } else {
+            setNetifDup(newints[intAddrs[int.ip]]);
+            intAddrs[int.ip] = [intAddrs[int.ip], i];
+          }
+          setNetifDup(int);
+        }
+      }
+
+      // Send out an error message for duplicate IP addresses
+      let msg = '';
+      for (const d in intAddrs) {
+        if (Array.isArray(intAddrs[d])) {
+          if (msg != '') {
+            msg += '; ';
+          }
+          msg += `Interfaces ${intAddrs[d].join(', ')} can't be used because they share the same IP address: ${d}`;
+        }
+      }
+
+      if (msg == '') {
+        notificationRemove('netif_dup_ip');
+      } else {
+        notificationBroadcast('netif_dup_ip', 'error', msg, 0, true, true);
+      }
+    }
+
+    if (intsChanged && isStreaming) {
       updateSrtlaIps();
     }
 
@@ -324,6 +378,9 @@ function updateNetif() {
       // a delay seems to be needed before NM registers new devices
       setTimeout(wifiUpdateDevices, 1000);
     }
+
+    netif = newints;
+    broadcastMsg('netif', netif, getms() - ACTIVE_TO);
   });
 }
 updateNetif();
@@ -346,6 +403,8 @@ function handleNetif(conn, msg) {
   if (msg['enabled'] === true || msg['enabled'] === false) {
     if (!msg['enabled'] && int.enabled && countActiveNetif() == 1) {
       notificationSend(conn, "netif_disable_all", "error", "Can't disable all networks", 10);
+    } else if (msg['enabled'] && int.error) {
+      notificationSend(conn, "netif_enable_error", "error", `Can't enable ${msg['name']}: ${int.error}`, 10);
     } else {
       int.enabled = msg['enabled'];
       if (isStreaming) {
@@ -948,8 +1007,9 @@ function handleWifi(conn, msg) {
   5 - wifi manager
   6 - notification sytem
   7 - support for config.bitrate_overlay
+  8 - support for netif error
 */
-const remoteProtocolVersion = 7;
+const remoteProtocolVersion = 8;
 const remoteEndpoint = 'wss://remote.belabox.net/ws/remote';
 const remoteTimeout = 5000;
 const remoteConnectTimeout = 10000;
