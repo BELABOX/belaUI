@@ -1531,6 +1531,8 @@ function start(conn, params) {
       let msg;
       if (err.match('Failed to establish any initial connections')) {
         msg = 'Failed to connect to the SRTLA server. Retrying...';
+      } else if (err.match('no available connections')) {
+        msg = 'All SRTLA connections failed. Trying to reconnect...';
       }
       if (msg) {
         notificationBroadcast('srtla', 'error', msg, duration = 5, isPersistent = true, isDismissable = false);
@@ -1560,6 +1562,10 @@ function start(conn, params) {
       } else if (err.match('Failed to establish an SRT connection')) {
         if (!notificationExists('srtla')) {
           msg = 'Failed to connect to the SRT server. Retrying...';
+        }
+      } else if (err.match(/The SRT connection.+, exiting/)) {
+        if (!notificationExists('srtla')) {
+          msg = 'The SRT connection failed. Trying to reconnect...';
         }
       }
       if (msg) {
