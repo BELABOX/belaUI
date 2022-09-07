@@ -1280,8 +1280,13 @@ function updateSensorsJetson() {
     sensors['SoC temperature'] = socTemp;
   } catch (err) {};
 
+  try {
+    isStreaming ? sensors['Uptime'] = `${new Date(Date.now() - streamStartTime).toISOString().substring(11, 16)}` : null;
+  } catch (error) {};
+
   broadcastMsg('sensors', sensors, getms() - ACTIVE_TO);
 }
+
 if (setup['hw'] == 'jetson') {
   updateSensorsJetson();
   setInterval(updateSensorsJetson, 1000);
@@ -1461,6 +1466,7 @@ async function updateConfig(conn, params, callback) {
 
 /* Streaming status */
 let isStreaming = false;
+let streamStartTime = null;
 function updateStatus(status) {
   isStreaming = status;
   broadcastMsg('status', {is_streaming: isStreaming});
@@ -1574,11 +1580,13 @@ function start(conn, params) {
     });
 
     updateStatus(true);
+    streamStartTime = Date.now();
   });
 }
 
 function stop() {
   updateStatus(false);
+  streamStartTime = null;
 
   // Remove the exit handlers which would restart the processes
   for (const p of streamingProcesses) {
