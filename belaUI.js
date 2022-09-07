@@ -1281,7 +1281,7 @@ function updateSensorsJetson() {
   } catch (err) {};
 
   try {
-    isStreaming ? sensors['Uptime'] = `${new Date(Date.now() - streamStartTime).toISOString().substring(11, 16)}` : null;
+    if (isStreaming) sensors['Uptime'] = `${new Date(Date.now() - streamStartTime).toISOString().substring(11, 16)}`;
   } catch (error) {};
 
   broadcastMsg('sensors', sensors, getms() - ACTIVE_TO);
@@ -1586,7 +1586,6 @@ function start(conn, params) {
 
 function stop() {
   updateStatus(false);
-  streamStartTime = null;
 
   // Remove the exit handlers which would restart the processes
   for (const p of streamingProcesses) {
