@@ -1258,6 +1258,7 @@ function notificationSendPersistent(conn) {
 
 /* Hardware monitoring */
 let sensors = {};
+let systemStartTime = Date.now();
 function updateSensorsJetson() {
   try {
     let socVoltage = fs.readFileSync('/sys/bus/i2c/drivers/ina3221x/6-0040/iio:device0/in_voltage0_input', 'utf8');
@@ -1281,7 +1282,7 @@ function updateSensorsJetson() {
   } catch (err) {};
 
   try {
-    if (isStreaming) sensors['Uptime'] = `${new Date(Date.now() - streamStartTime).toISOString().substring(11, 16)}`;
+    sensors['System uptime'] = `${new Date(Date.now() - systemStartTime).toISOString().substring(11, 16)}`;
   } catch (error) {};
 
   broadcastMsg('sensors', sensors, getms() - ACTIVE_TO);
@@ -1466,7 +1467,6 @@ async function updateConfig(conn, params, callback) {
 
 /* Streaming status */
 let isStreaming = false;
-let streamStartTime = null;
 function updateStatus(status) {
   isStreaming = status;
   broadcastMsg('status', {is_streaming: isStreaming});
@@ -1580,7 +1580,6 @@ function start(conn, params) {
     });
 
     updateStatus(true);
-    streamStartTime = Date.now();
   });
 }
 
