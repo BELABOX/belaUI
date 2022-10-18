@@ -36,7 +36,7 @@ const BCRYPT_ROUNDS = 10;
 const ACTIVE_TO = 15000;
 
 /* Disable localization for any CLI commands we run */
-process.env['LANG'] = 'C';
+process.env['LANG'] = 'C.UTF-8';
 /* Make sure apt-get doesn't expect any interactive user input */
 process.env['DEBIAN_FRONTEND'] = 'noninteractive';
 
