@@ -41,6 +41,11 @@ const DNS_TIMEOUT = 2000; // in ms
 const DNS_WELLKNOWN_NAME = 'wellknown.belabox.net';
 const DNS_WELLKNOWN_ADDR = '127.1.33.7';
 
+const CONNECTIVITY_CHECK_DOMAIN = 'www.gstatic.com';
+const CONNECTIVITY_CHECK_PATH = '/generate_204';
+const CONNECTIVITY_CHECK_CODE = 204;
+const CONNECTIVITY_CHECK_BODY = '';
+
 const BCRYPT_ROUNDS = 10;
 const ACTIVE_TO = 15000;
 
@@ -577,6 +582,143 @@ async function dnsCacheValidate(name) {
     }
   }
 }
+
+
+/*
+  Check Internet connectivity and if needed update the default route
+*/
+function httpGet(options) {
+  return new Promise(function(resolve, reject) {
+    let to;
+
+    if (options.timeout) {
+      to = setTimeout(function() {
+        reject('timeout');
+      }, options.timeout);
+    }
+
+    var req = http.get(options, function(res) {
+      let response = '';
+      res.on('data', function(d) {
+        response += d;
+      });
+      res.on('end', function() {
+        if (to) {
+          clearTimeout(to);
+        }
+        resolve( {code: res.statusCode, body: response} );
+      });
+    });
+
+    req.on('error', function(e) {
+      if (to) {
+        clearTimeout(to);
+      }
+      reject(e);
+    });
+  });
+}
+
+async function checkConnectivity(remoteAddr, localAddress) {
+  try {
+    let url = {};
+    url.headers = {'Host': CONNECTIVITY_CHECK_DOMAIN};
+    url.path = CONNECTIVITY_CHECK_PATH;
+    url.host = remoteAddr;
+    url.timeout = 4000;
+
+    if (localAddress) {
+      url.localAddress = localAddress;
+    }
+
+    const res = await httpGet(url);
+    if (res.code == CONNECTIVITY_CHECK_CODE || res.body == CONNECTIVITY_CHECK_BODY) {
+      return true;
+    }
+  } catch(err) {
+    console.log('Internet connectivity HTTP check error');
+    console.log(err);
+  }
+
+  return false;
+}
+
+const execP = util.promisify(exec);
+async function clear_default_gws() {
+  try {
+    while(1) {
+      await execP("ip route del default");
+    }
+  } catch(err) {
+    return;
+  }
+}
+
+
+let updateDefaultGwLock = 0;
+let updateDefaultGwQueue = 0;
+async function updateDefaultGw() {
+  // If the function is already executing, schedule a later repeat
+  if (updateDefaultGwLock) {
+    updateDefaultGwQueue = 1;
+    return;
+  }
+  updateDefaultGwQueue = 0;
+  updateDefaultGwLock = 1;
+
+  // Re-runs the function later if it failed or if a re-run was requested
+  function queueRerunIfNeeded(success) {
+    updateDefaultGwLock = 0;
+    if (!success || updateDefaultGwQueue) {
+      setTimeout(updateDefaultGw, 5000);
+    }
+  }
+
+  try {
+    var {addrs, fromCache} = await dnsCacheResolve(CONNECTIVITY_CHECK_DOMAIN);
+  } catch (err) {
+    console.log(`Failed to resolve ${CONNECTIVITY_CHECK_DOMAIN}: ${err}`);
+    return queueRerunIfNeeded(false);
+  }
+
+  for (const addr of addrs) {
+    if (await checkConnectivity(addr)) {
+      if (!fromCache) dnsCacheValidate(CONNECTIVITY_CHECK_DOMAIN);
+
+      console.log('Internet reachable via the default route');
+      return queueRerunIfNeeded(true);;
+    }
+  }
+
+  let goodIf;
+  for (const addr of addrs) {
+    for (const i in netif) {
+      console.log(`Probing internet connectivity via ${i} (${netif[i].ip})`);
+      if (await checkConnectivity(addr, netif[i].ip)) {
+        console.log(`Internet reachable via ${i} (${netif[i].ip})`);
+        if (!fromCache) dnsCacheValidate(CONNECTIVITY_CHECK_DOMAIN);
+
+        goodIf = i;
+        break;
+      }
+    }
+  }
+
+  if (goodIf) {
+    const gw = (await execP(`ip route show table ${goodIf} default`)).stdout;
+    await clear_default_gws();
+
+    const route = `ip route add ${gw}`;
+    console.log(`Setting default route: ${route}`);
+    await execP(route);
+
+    return queueRerunIfNeeded(true);
+  }
+
+  return queueRerunIfNeeded(false);
+}
+
+updateDefaultGw();
 
 
 /*
