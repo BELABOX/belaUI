@@ -32,6 +32,15 @@ const SETUP_FILE = 'setup.json';
 const CONFIG_FILE = 'config.json';
 const AUTH_TOKENS_FILE = 'auth_tokens.json';
 
+const DNS_CACHE_FILE = 'dns_cache.json';
+/* Minimum age of an updated record to trigger a persistent DNS cache update (in ms)
+   Some records change with almost every query if using CDNs, etc
+   This limits the frequency of file writes */
+const DNS_MIN_AGE = 60000; // in ms
+const DNS_TIMEOUT = 2000; // in ms
+const DNS_WELLKNOWN_NAME = 'wellknown.belabox.net';
+const DNS_WELLKNOWN_ADDR = '127.1.33.7';
+
 const BCRYPT_ROUNDS = 10;
 const ACTIVE_TO = 15000;
 
@@ -415,6 +424,158 @@ function handleNetif(conn, msg) {
   }
 
   conn.send(buildMsg('netif', netif));
+}
+
+
+/*
+  DNS utils w/ a persistent cache
+*/
+function resolveP(hostname, rrtype = undefined) {
+  if (rrtype) rrtype = rrtype.toLowerCase();
+  if (rrtype != 'a' && rrtype != 'aaaa' && rrtype !== undefined) {
+    throw(`invalid rrtype ${ttype}`);
+  }
+
+  return new Promise(function(resolve, reject) {
+    let to;
+
+    if (DNS_TIMEOUT) {
+      to = setTimeout(function() {
+        reject('timeout');
+      }, DNS_TIMEOUT);
+    }
+
+    let ipv4Res;
+    if (rrtype === undefined || rrtype == 'a') {
+      dns.resolve4(hostname, {}, function(err, address) {
+        ipv4Res = err ? null : address;
+        returnResults();
+      });
+    }
+
+    let ipv6Res;
+    if (rrtype === undefined || rrtype == 'aaaa') {
+      dns.resolve6(hostname, {}, function(err, address) {
+        ipv6Res = err ? null : address;
+        returnResults();
+      });
+    }
+
+    const returnResults = function() {
+      // If querying both for A and AAAA records, wait for the IPv4 result
+      if (rrtype === undefined && ipv4Res === undefined) return;
+
+      let res;
+      if (ipv4Res) {
+        res = ipv4Res;
+      } else if (ipv6Res) {
+        res = ipv6Res;
+      }
+
+      if (to) {
+        clearTimeout(to);
+      }
+      if (res) {
+        if (to) {
+          clearTimeout(to);
+        }
+        resolve(res);
+      } else {
+        reject('DNS record not found');
+      }
+    }
+  });
+}
+
+let dnsCache = {};
+let dnsResults = {};
+try {
+  dnsCache = JSON.parse(fs.readFileSync(DNS_CACHE_FILE, 'utf8'));
+} catch(err) {
+  console.log("Failed to load the persistent DNS cache, starting with an empty cache");
+}
+
+async function dnsCacheResolve(name, rrtype = undefined) {
+  let badDns = true;
+
+  /* Assume that DNS resolving is broken, unless it returns
+     the expected result for a known name */
+  try {
+    const lookup = await resolveP(DNS_WELLKNOWN_NAME, 'A');
+    if (lookup.length == 1 && lookup[0] == DNS_WELLKNOWN_ADDR) {
+      badDns = false;
+    } else {
+      console.log(`DNS validation failure: got result ${lookup} instead of the expected ${DNS_WELLKNOWN_ADDR}`);
+    }
+  } catch(e) {
+    console.log(`DNS validation failure: ${e}`);
+  }
+
+  if (badDns) {
+    delete dnsResults[name];
+  } else {
+    try {
+      const res = await resolveP(name, rrtype);
+      dnsResults[name] = res;
+
+      return {addrs: res, fromCache: false};
+    } catch(er) {
+      console.log('dns error ' + e);
+    }
+  }
+
+  if (dnsCache[name]) return {addrs: dnsCache[name].result, fromCache: true};
+
+  throw('DNS query failed and no cached value is available');
+}
+
+function compareArrayElements(a1, a2) {
+  if (!Array.isArray(a1) || !Array.isArray(a2)) return false;
+
+  const cmp = {};
+  for (e of a1) {
+    cmp[e] = false;
+  }
+
+  // check that all elements of a2 are in a1
+  for (e of a2) {
+    if (cmp[e] === undefined) {
+      return false;
+    }
+    cmp[e] = true;
+  }
+
+  // check that all elements of a1 are in a2
+  for (e in cmp) {
+    if (!cmp[e]) return false;
+  }
+
+  return true;
+}
+
+async function dnsCacheValidate(name) {
+  if (!dnsResults[name]) {
+    console.log(`DNS: error validating results for ${name}: not found`);
+    return;
+  }
+
+  if (!dnsCache[name] || !compareArrayElements(dnsResults[name], dnsCache[name].results)) {
+    let writeFile = true;
+
+    if (!dnsCache[name]) {
+      dnsCache[name] = {};
+    }
+
+    if (dnsCache[name].ts &&
+        (Date.now() - dnsCache[name].ts) < DNS_MIN_AGE) writeFile = false;
+
+    dnsCache[name].result = dnsResults[name];
+
+    if (writeFile) {
+      dnsCache[name].ts = Date.now();
+      await writeTextFile(DNS_CACHE_FILE, JSON.stringify(dnsCache));
+    }
+  }
 }
 
 
