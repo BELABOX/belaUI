@@ -686,9 +686,14 @@ async function updateDefaultGw() {
       if (!fromCache) dnsCacheValidate(CONNECTIVITY_CHECK_DOMAIN);
 
       console.log('Internet reachable via the default route');
+      notificationRemove('no_internet');
+
       return queueRerunIfNeeded(true);;
     }
   }
+
+  const m = 'No Internet connectivity via the default connection, re-checking all connections...';
+  notificationBroadcast('no_internet', 'warning', m, 10, true, false);
 
   let goodIf;
   for (const addr of addrs) {
@@ -709,8 +714,10 @@ async function updateDefaultGw() {
     await clear_default_gws();
 
     const route = `ip route add ${gw}`;
-    console.log(`Setting default route: ${route}`);
     await execP(route);
+
+    console.log(`Set default route: ${route}`);
+    notificationRemove('no_internet');
 
     return queueRerunIfNeeded(true);
   }
