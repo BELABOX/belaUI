@@ -1321,7 +1321,8 @@ function handleWifi(conn, msg) {
   8 - support for netif error
 */
 const remoteProtocolVersion = 8;
-const remoteEndpoint = 'wss://remote.belabox.net/ws/remote';
+const remoteEndpointHost = 'remote.belabox.net';
+const remoteEndpointPath = '/ws/remote';
 const remoteTimeout = 5000;
 const remoteConnectTimeout = 10000;
 
@@ -1347,23 +1348,6 @@ function handleRemote(conn, msg) {
   }
 }
 
-let prevRemoteBindAddr = -1;
-function getRemoteBindAddr() {
-  const netList = Object.keys(netif);
-
-  if (netList.length < 1) {
-    prevRemoteBindAddr = -1;
-    return undefined;
-  }
-
-  prevRemoteBindAddr++;
-  if (prevRemoteBindAddr >= netList.length) {
-    prevRemoteBindAddr = 0;
-  }
-
-  return netif[netList[prevRemoteBindAddr]].ip;
-}
-
 function remoteHandleMsg(msg) {
   try {
     msg = JSON.parse(msg);
@@ -1385,8 +1369,14 @@ function remoteHandleMsg(msg) {
 }
 
 let remoteConnectTimer;
-function remoteClose() {
+function remoteRetry() {
+  updateDefaultGw();
   remoteConnectTimer = setTimeout(remoteConnect, 1000);
+}
+
+function remoteClose() {
+  remoteRetry();
+
   this.removeListener('close', remoteClose);
   this.removeListener('message', remoteHandleMsg);
   remoteWs = undefined;
@@ -1396,22 +1386,31 @@ function remoteClose() {
   }
 }
 
-function remoteConnect() {
+async function remoteConnect() {
   if (remoteConnectTimer !== undefined) {
     clearTimeout(remoteConnectTimer);
     remoteConnectTimer = undefined;
   }
 
   if (config.remote_key) {
-    const bindIp = getRemoteBindAddr();
-    if (!bindIp) {
-      remoteConnectTimer = setTimeout(remoteConnect, 1000);
-      return;
+    let host = remoteEndpointHost;
+    try {
+      var {addrs, fromCache} = await dnsCacheResolve(remoteEndpointHost);
+
+      if (fromCache) {
+        host = addrs[Math.floor(Math.random()*addrs.length)];
+        updateDefaultGw();
+        console.log(`remote: DNS lookup failed, using cached address ${host}`);
+      }
+    } catch(err) {
+      return remoteRetry();
     }
-    console.log(`remote: trying to connect via ${bindIp}`);
+    console.log(`remote: trying to connect`);
 
     remoteStatusHandled = false;
-    remoteWs = new ws(remoteEndpoint, (options = {localAddress: bindIp}));
+    remoteWs = new ws(`wss://${host}${remoteEndpointPath}`,
+                      {servername: remoteEndpointHost,
+                       headers: {Host: remoteEndpointHost}});
     remoteWs.isAuthed = false;
     // Set a longer initial connection timeout - mostly to deal with slow DNS
     remoteWs.lastActive = getms() + remoteConnectTimeout - remoteTimeout;
@@ -1419,6 +1418,10 @@ function remoteConnect() {
       console.log('remote error: ' + err.message);
     });
     remoteWs.on('open', function() {
+      if (!fromCache) {
+        dnsCacheValidate(remoteEndpointHost);
+      }
+
       const auth_msg = {remote: {'auth/encoder':
                         {key: config.remote_key, version: remoteProtocolVersion}
                        }};
