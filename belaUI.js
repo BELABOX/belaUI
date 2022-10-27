@@ -525,8 +525,8 @@ async function dnsCacheResolve(name, rrtype = undefined) {
       dnsResults[name] = res;
 
       return {addrs: res, fromCache: false};
-    } catch(er) {
-      console.log('dns error ' + e);
+    } catch(err) {
+      console.log('dns error ' + err);
     }
   }
 
