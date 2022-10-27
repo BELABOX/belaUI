@@ -1984,6 +1984,7 @@ function parseUpgradePackageCount(text) {
     const upgradeCount = upgradedCount + newlyInstalledCount;
     return upgradeCount;
   } catch(err) {
+    console.log("parseUpgradePackageCount(): failed to parse the package info");
     return undefined;
   }
 }
