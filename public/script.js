@@ -373,8 +373,10 @@ function loadConfig(c) {
   initSrtLatencySlider(config.srt_latency ?? 2000);
   updatePipelines(null);
 
+  const srtlaAddr = config.srtla_addr ?? "";
+  showHideRelayHint(srtlaAddr);
+  document.getElementById("srtlaAddr").value = srtlaAddr;
   document.getElementById("srtStreamid").value = config.srt_streamid ?? "";
-  document.getElementById("srtlaAddr").value = config.srtla_addr ?? "";
   document.getElementById("srtlaPort").value = config.srtla_port ?? "";
 
   $('#remoteDeviceKey').val(config.remote_key);
@@ -1165,6 +1167,19 @@ $('button.showHidePassword').click(function() {
     inputField.attr('type', 'password');
     $(this).text('Show');
   }
+});
+
+function showHideRelayHint(addr) {
+  const isCloudRelay = addr.match(/belabox.net$/);
+  if (isCloudRelay) {
+    $('#cloudRelay').addClass('d-none');
+  } else {
+    $('#cloudRelay').removeClass('d-none');
+  }
+}
+
+$('input#srtlaAddr').change(function() {
+  showHideRelayHint($(this).val());
 });
 
 /* Input fields automatically copied to clipboard when clicked */
