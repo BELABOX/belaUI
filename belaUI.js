@@ -437,9 +437,8 @@ function handleNetif(conn, msg) {
   DNS utils w/ a persistent cache
 */
 function resolveP(hostname, rrtype = undefined) {
-  if (rrtype) rrtype = rrtype.toLowerCase();
-  if (rrtype != 'a' && rrtype != 'aaaa' && rrtype !== undefined) {
-    throw(`invalid rrtype ${ttype}`);
+  if (rrtype !== undefined && rrtype !== 'a' && rrtype !== 'aaaa') {
+    throw(`invalid rrtype ${rrtype}`);
   }
 
   return new Promise(function(resolve, reject) {
@@ -501,13 +500,28 @@ try {
   console.log("Failed to load the persistent DNS cache, starting with an empty cache");
 }
 
+function isIpv4Addr(val) {
+  return val.match(/^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}$/) != null;
+}
+
 async function dnsCacheResolve(name, rrtype = undefined) {
+  if (rrtype) {
+    rrtype = rrtype.toLowerCase();
+    if (rrtype !== 'a' && rrtype !== 'aaaa') {
+      throw('Invalid rrtype');
+    }
+  }
+
+  if (isIpv4Addr(name) && rrtype != 'aaaa') {
+    return {addrs: [name], fromCache: false};
+  }
+
   let badDns = true;
 
   /* Assume that DNS resolving is broken, unless it returns
      the expected result for a known name */
   try {
-    const lookup = await resolveP(DNS_WELLKNOWN_NAME, 'A');
+    const lookup = await resolveP(DNS_WELLKNOWN_NAME, 'a');
     if (lookup.length == 1 && lookup[0] == DNS_WELLKNOWN_ADDR) {
       badDns = false;
     } else {

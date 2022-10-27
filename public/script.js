@@ -274,7 +274,7 @@ $('#softwareUpdate').click(function() {
   const msg = 'Are you sure you want to start a software update? ' +
               'This may take several minutes. ' +
               'You won\'t be able to start a stream until it\'s completed. ' +
-              'The encoder will briefly disconnect after a succesful upgrade. ' +
+              'The encoder will briefly disconnect after a successful upgrade. ' +
               'Never remove power or reset the encoder while updating. If the encoder is powered from a battery, ensure it\'s fully charged.';
 
   if (confirm(msg)) {
