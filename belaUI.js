@@ -2348,7 +2348,10 @@ function tryAuth(conn, msg) {
 
 
 function handleMessage(conn, msg, isRemote = false) {
-  console.log(msg);
+  // log all received messages except for keepalives
+  if (Object.keys(msg).length > 1 || msg.keepalive === undefined) {
+    console.log(msg);
+  }
 
   if (!isRemote) {
     for (const type in msg) {
