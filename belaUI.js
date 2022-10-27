@@ -637,8 +637,7 @@ async function checkConnectivity(remoteAddr, localAddress) {
       return true;
     }
   } catch(err) {
-    console.log('Internet connectivity HTTP check error');
-    console.log(err);
+    console.log('Internet connectivity HTTP check error ' + (err.code || err));
   }
 
   return false;
@@ -656,30 +655,21 @@ async function clear_default_gws() {
 }
 
 
-let updateDefaultGwLock = 0;
-let updateDefaultGwQueue = 0;
-async function updateDefaultGw() {
-  // If the function is already executing, schedule a later repeat
-  if (updateDefaultGwLock) {
-    updateDefaultGwQueue = 1;
-    return;
-  }
-  updateDefaultGwQueue = 0;
-  updateDefaultGwLock = 1;
+let updateGwLock = false;
+let updateGwLastRun = 0;
+let updateGwQueue = false;
 
-  // Re-runs the function later if it failed or if a re-run was requested
-  function queueRerunIfNeeded(success) {
-    updateDefaultGwLock = 0;
-    if (!success || updateDefaultGwQueue) {
-      setTimeout(updateDefaultGw, 5000);
-    }
-  }
+function queueUpdateGw() {
+  updateGwQueue = true;
+  updateGwWrapper();
+}
 
+async function updateGw() {
   try {
     var {addrs, fromCache} = await dnsCacheResolve(CONNECTIVITY_CHECK_DOMAIN);
   } catch (err) {
     console.log(`Failed to resolve ${CONNECTIVITY_CHECK_DOMAIN}: ${err}`);
-    return queueRerunIfNeeded(false);
+    return false;
   }
 
   for (const addr of addrs) {
@@ -689,7 +679,7 @@ async function updateDefaultGw() {
       console.log('Internet reachable via the default route');
       notificationRemove('no_internet');
 
-      return queueRerunIfNeeded(true);;
+      return true;
     }
   }
 
@@ -720,13 +710,38 @@ async function updateDefaultGw() {
     console.log(`Set default route: ${route}`);
     notificationRemove('no_internet');
 
-    return queueRerunIfNeeded(true);
+    return true;
   }
 
-  return queueRerunIfNeeded(false);
+  return false;
 }
 
-updateDefaultGw();
+const UPDATE_GW_INT = 2000;
+function updateGwWrapper() {
+  // Do nothing if no request is queued
+  if (!updateGwQueue) return;
+
+  // Rate limit
+  const ts = getms();
+  const to = updateGwLastRun + UPDATE_GW_INT;
+  if (ts < to) return;
+
+  // Don't allow simultaneous execution
+  if (updateGwLock) return;
+
+  // Proceeding, update status
+  updateGwLastRun = ts;
+  updateGwLock = true;
+  updateGwQueue = false;
+
+  const r = updateGw();
+  if (!r) {
+    updateGwQueue = true;
+  }
+  updateGwLock = false;
+}
+
+setInterval(updateGwWrapper, UPDATE_GW_INT);
 
 
 /*
@@ -1371,7 +1386,7 @@ function remoteHandleMsg(msg) {
 
 let remoteConnectTimer;
 function remoteRetry() {
-  updateDefaultGw();
+  queueUpdateGw();
   remoteConnectTimer = setTimeout(remoteConnect, 1000);
 }
 
@@ -1400,7 +1415,7 @@ async function remoteConnect() {
 
       if (fromCache) {
         host = addrs[Math.floor(Math.random()*addrs.length)];
-        updateDefaultGw();
+        queueUpdateGw();
         console.log(`remote: DNS lookup failed, using cached address ${host}`);
       }
     } catch(err) {
@@ -1754,13 +1769,13 @@ async function updateConfig(conn, params, callback) {
     var {addrs, fromCache} = await dnsCacheResolve(params.srtla_addr, 'a');
   } catch (err) {
     startError(conn, "failed to resolve SRTLA addr " + params.srtla_addr, conn.senderId);
-    updateDefaultGw();
+    queueUpdateGw();
     return;
   }
 
   if (fromCache) {
     srtlaAddr = addrs[Math.floor(Math.random()*addrs.length)];
-    updateDefaultGw();
+    queueUpdateGw();
   } else {
     /* At the moment we don't check that the SRTLA connection was established before
        validating the DNS result. The caching DNS resolver checks for invalid
@@ -2035,7 +2050,7 @@ function checkForSoftwareUpdates(callback) {
     if (stderr.length) {
       var err = true;
       aptGetUpdateFailures++;
-      updateDefaultGw();
+      queueUpdateGw();
     } else {
       aptGetUpdateFailures = 0;
     }
