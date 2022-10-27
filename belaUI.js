@@ -1747,28 +1747,40 @@ async function updateConfig(conn, params, callback) {
   if (params.srtla_port <= 0 || params.srtla_port > 0xFFFF)
     return startError(conn, "invalid SRTLA port " + params.srtla_port);
 
-  // Save the sender's ID in case we'll have to use it in the exception handler
-  const senderId = conn.senderId;
-  dns.lookup(params.srtla_addr, function(err, address, family) {
-    if (err == null) {
-      config.delay = params.delay;
-      config.pipeline = params.pipeline;
-      config.max_br = params.max_br;
-      config.srt_latency = params.srt_latency;
-      config.srt_streamid = params.srt_streamid;
-      config.srtla_addr = params.srtla_addr;
-      config.srtla_port = params.srtla_port;
-      config.bitrate_overlay = params.bitrate_overlay;
+  // resolve the srtla hostname
+  let srtlaAddr = params.srtla_addr;
+  try {
+    var {addrs, fromCache} = await dnsCacheResolve(params.srtla_addr, 'a');
+  } catch (err) {
+    startError(conn, "failed to resolve SRTLA addr " + params.srtla_addr, conn.senderId);
+    updateDefaultGw();
+    return;
+  }
 
-      saveConfig();
+  if (fromCache) {
+    srtlaAddr = addrs[Math.floor(Math.random()*addrs.length)];
+    updateDefaultGw();
+  } else {
+    /* At the moment we don't check that the SRTLA connection was established before
+       validating the DNS result. The caching DNS resolver checks for invalid
+       results from captive portals, etc, so all results *should* be good already */
+    dnsCacheValidate(params.srtla_addr);
+  }
 
-      broadcastMsgExcept(conn, 'config', config);
-      
-      callback(pipeline);
-    } else {
-      startError(conn, "failed to resolve SRTLA addr " + params.srtla_addr, senderId);
-    }
-  });
+  config.delay = params.delay;
+  config.pipeline = params.pipeline;
+  config.max_br = params.max_br;
+  config.srt_latency = params.srt_latency;
+  config.srt_streamid = params.srt_streamid;
+  config.srtla_addr = params.srtla_addr;
+  config.srtla_port = params.srtla_port;
+  config.bitrate_overlay = params.bitrate_overlay;
+
+  saveConfig();
+
+  broadcastMsgExcept(conn, 'config', config);
+
+  callback(pipeline, srtlaAddr);
 }
 
 
@@ -1828,16 +1840,17 @@ function start(conn, params) {
   }
 
   const senderId = conn.senderId;
-  updateConfig(conn, params, function(pipeline) {
+  updateConfig(conn, params, function(pipeline, srtlaAddr) {
     if (genSrtlaIpList() < 1) {
       startError(conn, "Failed to start, no available network connections", senderId);
       return;
     }
+
     isStreaming = true;
 
     spawnStreamingLoop(srtlaSendExec, [
                          9000,
-                         config.srtla_addr,
+                         srtlaAddr,
                          config.srtla_port,
                          setup.ips_file
                        ], 100, function(err) {
