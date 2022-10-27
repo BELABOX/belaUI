@@ -2030,16 +2030,18 @@ function checkForSoftwareUpdates(callback) {
   exec("apt-get update --allow-releaseinfo-change", function(err, stdout, stderr) {
     aptGetUpdating = false;
 
-    if (stderr.length) err = true;
+    if (stderr.length) {
+      var err = true;
+      aptGetUpdateFailures++;
+      updateDefaultGw();
+    } else {
+      aptGetUpdateFailures = 0;
+    }
+
     console.log(`apt-get update: ${(err === null) ? 'success' : 'error'}`);
     console.log(stdout);
     console.log(stderr);
 
-    if (err === null) {
-      aptGetUpdateFailures = 0;
-    } else {
-      aptGetUpdateFailures++;
-    }
     if (callback) callback(err, aptGetUpdateFailures);
   });
 }
