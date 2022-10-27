@@ -51,6 +51,7 @@ const ACTIVE_TO = 15000;
 
 /* Disable localization for any CLI commands we run */
 process.env['LANG'] = 'C.UTF-8';
+process.env['LANGUAGE'] = 'C';
 /* Make sure apt-get doesn't expect any interactive user input */
 process.env['DEBIAN_FRONTEND'] = 'noninteractive';
 
