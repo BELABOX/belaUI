@@ -2055,25 +2055,25 @@ function getSoftwareUpdateSize() {
     console.log(stdout);
     console.log(stderr);
 
-    // Currently unused, may do some filtering in the future
-    let packageList = stdout.split("The following packages will be upgraded:\n")[1];
-    packageList = packageList.split(/\n\d+/)[0];
-    packageList = packageList.replace(/[\n ]+/g, ' ');
-    packageList = packageList.trim();
-
     const upgradeCount = parseUpgradePackageCount(stdout);
     let downloadSize;
     if (upgradeCount > 0) {
       downloadSize = parseUpgradeDownloadSize(stdout);
+
+      let packageList = stdout.split("The following packages will be upgraded:\n")[1];
+      packageList = packageList.split(/\n\d+/)[0];
+      packageList = packageList.replace(/[\n ]+/g, ' ');
+      packageList = packageList.trim();
+
+      if (includesBelaboxPackages(packageList)) {
+        notificationBroadcast('belabox_update', 'warning',
+          'A BELABOX update is available. Scroll down to the System menu to install it.',
+           0, true, false);
+      }
     }
+
     availableUpdates = {package_count: upgradeCount, download_size: downloadSize};
     broadcastMsg('status', {available_updates: availableUpdates});
-
-    if (includesBelaboxPackages(packageList)) {
-      notificationBroadcast('belabox_update', 'warning',
-        'A BELABOX update is available. Scroll down to the System menu to install it.',
-         0, true, false);
-    }
   });
 }
 
