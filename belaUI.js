@@ -2029,6 +2029,25 @@ function parseUpgradeDownloadSize(text) {
   }
 }
 
+const belaboxPackages = [
+  'belabox',
+  'belabox-apt-source',
+  'belabox-network-config',
+  'belabox-rtmp-server',
+  'belabox-sys-recommended',
+  'belacoder',
+  'belaUI',
+  'srt',
+  'srtla',
+  'usb-modeswitch-data'
+];
+function includesBelaboxPackages(list) {
+  for (const p of belaboxPackages) {
+    if (list.includes(p)) return true;
+  }
+  return false;
+}
+
 function getSoftwareUpdateSize() {
   if (isStreaming || isUpdating() || aptGetUpdating) return;
 
@@ -2036,13 +2055,11 @@ function getSoftwareUpdateSize() {
     console.log(stdout);
     console.log(stderr);
 
-    /*
     // Currently unused, may do some filtering in the future
     let packageList = stdout.split("The following packages will be upgraded:\n")[1];
     packageList = packageList.split(/\n\d+/)[0];
     packageList = packageList.replace(/[\n ]+/g, ' ');
     packageList = packageList.trim();
-    */
 
     const upgradeCount = parseUpgradePackageCount(stdout);
     let downloadSize;
@@ -2051,6 +2068,12 @@ function getSoftwareUpdateSize() {
     }
     availableUpdates = {package_count: upgradeCount, download_size: downloadSize};
     broadcastMsg('status', {available_updates: availableUpdates});
+
+    if (includesBelaboxPackages(packageList)) {
+      notificationBroadcast('belabox_update', 'warning',
+        'A BELABOX update is available. Scroll down to the System menu to install it.',
+         0, true, false);
+    }
   });
 }
 
