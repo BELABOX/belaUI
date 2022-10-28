@@ -2036,7 +2036,7 @@ const belaboxPackages = [
   'belabox-rtmp-server',
   'belabox-sys-recommended',
   'belacoder',
-  'belaUI',
+  'belaui',
   'srt',
   'srtla',
   'usb-modeswitch-data'
