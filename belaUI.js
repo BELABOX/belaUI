@@ -311,6 +311,14 @@ function updateNetif() {
             wiFiDeviceListAdd(name, hwAddr[1], inetAddr);
           }
         }
+        // Adding support for MediaTek MT67 devices:
+        // Linksys AE6000
+        if (name && name.match('^ra')) {
+          let hwAddr = int.match(/ether ([0-9a-f:]+)/);
+          if (hwAddr) {
+            wiFiDeviceListAdd(name, hwAddr[1], inetAddr);
+          }
+        }
 
         if (name == 'lo' || name.match('^docker') || name.match('^l4tbr')) continue;
 
