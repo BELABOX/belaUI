@@ -671,7 +671,7 @@ async function clear_default_gws() {
 
 let updateGwLock = false;
 let updateGwLastRun = 0;
-let updateGwQueue = false;
+let updateGwQueue = true;
 
 function queueUpdateGw() {
   updateGwQueue = true;
@@ -754,7 +754,7 @@ async function updateGwWrapper() {
   }
   updateGwLock = false;
 }
-
+updateGwWrapper();
 setInterval(updateGwWrapper, UPDATE_GW_INT);
 
 
