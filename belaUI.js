@@ -731,7 +731,7 @@ async function updateGw() {
 }
 
 const UPDATE_GW_INT = 2000;
-function updateGwWrapper() {
+async function updateGwWrapper() {
   // Do nothing if no request is queued
   if (!updateGwQueue) return;
 
@@ -748,7 +748,7 @@ function updateGwWrapper() {
   updateGwLock = true;
   updateGwQueue = false;
 
-  const r = updateGw();
+  const r = await updateGw();
   if (!r) {
     updateGwQueue = true;
   }
