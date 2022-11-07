@@ -647,7 +647,7 @@ async function checkConnectivity(remoteAddr, localAddress) {
     }
 
     const res = await httpGet(url);
-    if (res.code == CONNECTIVITY_CHECK_CODE || res.body == CONNECTIVITY_CHECK_BODY) {
+    if (res.code == CONNECTIVITY_CHECK_CODE && res.body == CONNECTIVITY_CHECK_BODY) {
       return true;
     }
   } catch(err) {
