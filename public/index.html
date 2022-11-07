@@ -246,19 +246,19 @@
             </div> <!-- .collapse -->
           </div> <!-- .card -->
 
-          <div class="card mb-2 d-none" id="advancedSettings">
+          <div class="card mb-2" id="advancedSettings">
             <div class="card-header bg-success text-center" type="button"
                  data-toggle="collapse" data-target="#collapseFour">
               <button class="btn btn-link text-white" type="button" data-toggle="collapse"
                       data-target="#collapseFour" aria-expanded="false" aria-controls="collapseFour">
-                Advanced / developer settings
+                Advanced / developer
               </button>
             </div> <!-- card-header -->
 
             <div class="collapse" id="collapseFour">
               <div class="card-body">
 
-                <div class="form-group">
+                <div class="form-group d-none mb-2" id="sshSettings">
                   <label for="sshPassword">SSH login</label>
                   <div class="input-group">
                     <input type="password" class="form-control click-copy" id="sshPassword" readonly/>
@@ -267,13 +267,18 @@
                       <button class="btn btn-outline-danger btn-netact" id="resetSshPass" type="button">Reset</button>
                     </div>
                   </div>
+
+                  <button type="button" id="startSsh" class="btn btn-block btn-success command-btn btn-netact mt-2 d-none">
+                    Start SSH server
+                  </button>
+                  <button type="button" id="stopSsh" class="btn btn-block btn-danger command-btn btn-netact mt-2 d-none">
+                    Stop SSH server
+                  </button>
                 </div>
 
-                <button type="button" id="startSsh" class="btn btn-block btn-success command-btn btn-netact d-none">
-                  Start SSH server
-                </button>
-                <button type="button" id="stopSsh" class="btn btn-block btn-danger command-btn btn-netact d-none">
-                  Stop SSH server
+                <button type="button" id="getLog" class="btn btn-block btn-primary command-btn btn-netact"
+                        data-confirmation="The log contains sensitive information such as passwords. Only share it with trusted individuals">
+                  Download BELABOX log
                 </button>
 
               </div> <!-- .card-body -->

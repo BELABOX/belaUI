@@ -303,7 +303,7 @@ function showSshStatus(s) {
     $('#stopSsh').addClass('d-none');
     $('#startSsh').removeClass('d-none');
   }
-  $('#advancedSettings').removeClass('d-none');
+  $('#sshSettings').removeClass('d-none');
 }
 
 $('#resetSshPass').click(function() {
@@ -868,6 +868,19 @@ function handleNotification(msg) {
 }
 
 
+/* Log download */
+function downloadLog(msg) {
+  const blob = new Blob([msg], {type: 'text/plain'})
+
+  const a = window.document.createElement('a');
+  a.href = window.URL.createObjectURL(blob);
+  a.download = 'belabox_log.txt';
+  a.click();
+
+  window.URL.revokeObjectURL(blob);
+}
+
+
 /* Handle server-to-client messages */
 function handleMessage(msg) {
   console.log(msg);
@@ -905,6 +918,9 @@ function handleMessage(msg) {
         break;
       case 'notification':
         handleNotification(msg[type]);
+        break;
+      case 'log':
+        downloadLog(msg[type]);
         break;
     }
   }
@@ -1153,9 +1169,12 @@ $('#logout').click(function() {
 });
 
 $('.command-btn').click(function() {
-  // convert to snake case
-  const cmd = this.id.split(/(?=[A-Z])/).join('_').toLowerCase();
-  send_command(cmd);
+  const confirmationMsg = $(this).attr('data-confirmation');
+  if (!confirmationMsg || confirm(confirmationMsg)) {
+    // convert to snake case
+    const cmd = this.id.split(/(?=[A-Z])/).join('_').toLowerCase();
+    send_command(cmd);
+  }
 });
 
 $('button.showHidePassword').click(function() {
