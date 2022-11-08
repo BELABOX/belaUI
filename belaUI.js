@@ -716,16 +716,20 @@ async function updateGw() {
   }
 
   if (goodIf) {
-    const gw = (await execP(`ip route show table ${goodIf} default`)).stdout;
-    await clear_default_gws();
+    try {
+      const gw = (await execP(`ip route show table ${goodIf} default`)).stdout;
+      await clear_default_gws();
 
-    const route = `ip route add ${gw}`;
-    await execP(route);
+      const route = `ip route add ${gw}`;
+      await execP(route);
 
-    console.log(`Set default route: ${route}`);
-    notificationRemove('no_internet');
+      console.log(`Set default route: ${route}`);
+      notificationRemove('no_internet');
 
-    return true;
+      return true;
+    } catch (err) {
+      console.log(`Error updating the default route: ${err}`);
+    }
   }
 
   return false;
