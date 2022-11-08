@@ -608,6 +608,7 @@ function httpGet(options) {
 
     if (options.timeout) {
       to = setTimeout(function() {
+        req.destroy();
         reject('timeout');
       }, options.timeout);
     }
