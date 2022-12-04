@@ -2129,8 +2129,19 @@ function periodicCheckForSoftwareUpdates() {
     if (err === null) {
       getSoftwareUpdateSize();
     }
-    const interval = (err === null) ? oneDay : ((failures > 3) ? oneHour : oneMinute);
-    setTimeout(periodicCheckForSoftwareUpdates, interval);
+    // one hour delay after a succesful check
+    let delay = oneHour;
+    // otherwise, increasing delay depending on the number of failures
+    if (err !== null) {
+      // try after 10s for the first ~2 minutes
+      if (failures < 12) {
+        delay = 10;
+      // back off to a minute delay
+      } else {
+        delay = oneMinute;
+      }
+    }
+    setTimeout(periodicCheckForSoftwareUpdates, delay);
   });
 }
 if (setup.apt_update_enabled) {
