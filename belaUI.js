@@ -241,16 +241,22 @@ function broadcastMsgExcept(conn, type, data) {
 
 /* Read the list of pipeline files */
 function readDirAbsPath(dir) {
-  const files = fs.readdirSync(dir);
-  const basename = path.basename(dir);
   const pipelines = {};
 
-  for (const f in files) {
-    const name = basename + '/' + files[f];
-    const id = crypto.createHash('sha1').update(name).digest('hex');
-    const path = dir + files[f];
-    pipelines[id] = {name: name, path: path};
-  }
+  try {
+    const files = fs.readdirSync(dir);
+    const basename = path.basename(dir);
+
+    for (const f in files) {
+      const name = basename + '/' + files[f];
+      const id = crypto.createHash('sha1').update(name).digest('hex');
+      const path = dir + files[f];
+      pipelines[id] = {name: name, path: path};
+    }
+  } catch (err) {
+    console.log(`Failed to read the pipeline files in ${dir}:`);
+    console.log(err);
+  };
 
   return pipelines;
 }
