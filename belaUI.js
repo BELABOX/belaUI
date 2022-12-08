@@ -263,6 +263,7 @@ function readDirAbsPath(dir) {
 
 function getPipelines() {
   const ps = {};
+  Object.assign(ps, readDirAbsPath(belacoderPipelinesDir + '/custom/'));
   if (setup['hw'] == 'jetson') {
     Object.assign(ps, readDirAbsPath(belacoderPipelinesDir + '/jetson/'));
   }
