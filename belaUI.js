@@ -2089,19 +2089,22 @@ function parseUpgradeDownloadSize(text) {
   }
 }
 
+// Show an update notification if there are pending updates to packages matching this list
 const belaboxPackages = [
   'belabox',
-  'belabox-apt-source',
-  'belabox-network-config',
-  'belabox-rtmp-server',
-  'belabox-sys-recommended',
   'belacoder',
   'belaui',
-  'srt',
   'srtla',
-  'usb-modeswitch-data'
+  'usb-modeswitch-data',
+  'l4t'
 ];
-function includesBelaboxPackages(list) {
+// Reboot instead of just restarting belaUI if we've updated packages matching this list
+const rebootPackages = [
+  'l4t',
+  'belabox-linux-tegra',
+  'belabox-network-config'
+];
+function packageListIncludes(list, includes) {
   for (const p of belaboxPackages) {
     if (list.includes(p)) return true;
   }
@@ -2121,6 +2124,10 @@ function parseAptPackageList(stdout, heading) {
   return packageList;
 }
 
+function parseAptUpgradedPackages(stdout) {
+  return parseAptPackageList(stdout, "The following packages will be upgraded:\n")
+}
+
 function parseAptUpgradeSummary(stdout) {
   const upgradeCount = parseUpgradePackageCount(stdout);
   let downloadSize;
@@ -2128,8 +2135,8 @@ function parseAptUpgradeSummary(stdout) {
   if (upgradeCount > 0) {
     downloadSize = parseUpgradeDownloadSize(stdout);
 
-    packageList = parseAptPackageList(stdout, "The following packages will be upgraded:\n");
-    if (includesBelaboxPackages(packageList)) {
+    packageList = parseAptUpgradedPackages(stdout);
+    if (packageListIncludes(packageList, belaboxPackages)) {
       belaboxPackages = true;
     }
   }
@@ -2239,6 +2246,7 @@ function startSoftwareUpdate() {
 function doSoftwareUpdate() {
   if (!setup.apt_update_enabled || isStreaming) return;
 
+  let rebootAfterUpgrade = false;
   let aptLog = '';
   let aptErr = '';
 
@@ -2260,6 +2268,11 @@ function doSoftwareUpdate() {
       if (count !== undefined) {
         softUpdateStatus.total = count;
         sendUpdate = true;
+
+        let packageList = parseAptUpgradedPackages(aptLog);
+        if (packageListIncludes(packageList, rebootPackages)) {
+          rebootAfterUpgrade = true;
+        }
       }
     }
 
@@ -2306,7 +2319,13 @@ function doSoftwareUpdate() {
     console.log(aptLog);
     console.log(aptErr);
 
-    if (code == 0) process.exit(0);
+    if (code == 0) {
+      if (rebootAfterUpgrade) {
+        spawnSync("reboot", {detached: true});
+      } else {
+        process.exit(0);
+      }
+    }
   });
 }
 
