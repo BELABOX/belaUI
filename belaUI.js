@@ -2041,6 +2041,7 @@ let availableUpdates = setup.apt_update_enabled ? null : false;
 let softUpdateStatus = null;
 let aptGetUpdating = false;
 let aptGetUpdateFailures = 0;
+let aptHeldBackPackages;
 
 function isUpdating() {
   return (softUpdateStatus != null);
@@ -2087,33 +2088,62 @@ function includesBelaboxPackages(list) {
   return false;
 }
 
-function getSoftwareUpdateSize() {
+// Parses a list of packets shown by apt-get under a certain heading
+function parseAptPackageList(stdout, heading) {
+  let packageList;
+  try {
+    packageList = stdout.split(heading)[1];
+    packageList = packageList.split(/\n[\d\w]+/)[0];
+    packageList = packageList.replace(/[\n ]+/g, ' ');
+    packageList = packageList.trim();
+  } catch (err) {};
+
+  return packageList;
+}
+
+function parseAptUpgradeSummary(stdout) {
+  const upgradeCount = parseUpgradePackageCount(stdout);
+  let downloadSize;
+  let belaboxPackages = false;
+  if (upgradeCount > 0) {
+    downloadSize = parseUpgradeDownloadSize(stdout);
+
+    packageList = parseAptPackageList(stdout, "The following packages will be upgraded:\n");
+    if (includesBelaboxPackages(packageList)) {
+      belaboxPackages = true;
+    }
+  }
+
+  return {upgradeCount, downloadSize, belaboxPackages};
+}
+
+async function getSoftwareUpdateSize() {
   if (isStreaming || isUpdating() || aptGetUpdating) return;
 
-  exec("apt-get dist-upgrade --assume-no", function(err, stdout, stderr) {
-    console.log(stdout);
-    console.log(stderr);
+  // First see if any packages can be upgraded by dist-upgrade
+  let upgrade = await execPNR("apt-get dist-upgrade --assume-no");
+  let res = parseAptUpgradeSummary(upgrade.stdout);
 
-    const upgradeCount = parseUpgradePackageCount(stdout);
-    let downloadSize;
-    if (upgradeCount > 0) {
-      downloadSize = parseUpgradeDownloadSize(stdout);
-
-      let packageList = stdout.split("The following packages will be upgraded:\n")[1];
-      packageList = packageList.split(/\n\d+/)[0];
-      packageList = packageList.replace(/[\n ]+/g, ' ');
-      packageList = packageList.trim();
-
-      if (includesBelaboxPackages(packageList)) {
-        notificationBroadcast('belabox_update', 'warning',
-          'A BELABOX update is available. Scroll down to the System menu to install it.',
-           0, true, false);
-      }
+  // Otherwise, check if any packages have been held back (e.g. by dependencies changing)
+  if (res.upgradeCount == 0) {
+    aptHeldBackPackages = parseAptPackageList(upgrade.stdout, "The following packages have been kept back:\n");
+    if (aptHeldBackPackages) {
+      upgrade = await execPNR("apt-get upgrade --assume-no " + aptHeldBackPackages);
+      res = parseAptUpgradeSummary(upgrade.stdout);
     }
+  } else {
+    // Reset aptHeldBackPackages if some upgrades became available via dist-upgrade
+    aptHeldBackPackages = undefined;
+  }
 
-    availableUpdates = {package_count: upgradeCount, download_size: downloadSize};
-    broadcastMsg('status', {available_updates: availableUpdates});
-  });
+  if (res.belaboxPackages) {
+    notificationBroadcast('belabox_update', 'warning',
+      'A BELABOX update is available. Scroll down to the System menu to install it.',
+      0, true, false);
+  }
+
+  availableUpdates = {package_count: res.upgradeCount, download_size: res.downloadSize};
+  broadcastMsg('status', {available_updates: availableUpdates});
 }
 
 function checkForSoftwareUpdates(callback) {
@@ -2192,8 +2222,13 @@ function doSoftwareUpdate() {
   let aptLog = '';
   let aptErr = '';
 
-  const args = "-y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold dist-upgrade".split(' ');
-  const aptUpgrade = spawn("apt-get", args);
+  let args = "-y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold ";
+  if (aptHeldBackPackages) {
+    args += "upgrade " + aptHeldBackPackages;
+  } else {
+    args += "dist-upgrade";
+  }
+  const aptUpgrade = spawn("apt-get", args.split(' '));
 
   aptUpgrade.stdout.on('data', function(data) {
     let sendUpdate = false;
