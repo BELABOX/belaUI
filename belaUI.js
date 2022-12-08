@@ -1732,6 +1732,7 @@ process.on('SIGUSR2', checkCamlinkUsb2);
 checkCamlinkUsb2();
 
 
+/* Stream starting, stopping, management and monitoring */
 function startError(conn, msg, id = undefined) {
   const originalId = conn.senderId;
   if (id !== undefined) {
@@ -1854,8 +1855,6 @@ async function updateConfig(conn, params, callback) {
   callback(pipeline, srtlaAddr);
 }
 
-
-/* Streaming status */
 let isStreaming = false;
 function updateStatus(status) {
   isStreaming = status;
