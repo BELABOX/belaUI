@@ -1651,9 +1651,26 @@ if (setup['hw'] == 'jetson') {
   setInterval(updateSensorsJetson, 1000);
 }
 
+async function isBootconfigEnabled() {
+  const isEnabled = await execPNR("systemctl is-enabled belabox-firstboot-bootconfig")
+  return (isEnabled.code === 0);
+}
 
-/* Monitor the kernel log for undervoltage events */
+async function monitorBootconfig() {
+  if (await isBootconfigEnabled()) {
+    if (!notificationExists('bootconfig')) {
+      const msg = "Don't reset or unplug the system. The bootloader is being updated in the background and doing so may brick your board..."
+      notificationBroadcast('bootconfig', 'warning', msg, 0, true, false);
+    }
+
+    setTimeout(monitorBootconfig, 2000);
+  } else {
+    notificationRemove('bootconfig');
+  }
+}
+
 if (setup.hw == 'jetson') {
+  /* Monitor the kernel log for undervoltage events */
   const dmesg = spawn("dmesg", ["-w"]);
 
   dmesg.stdout.on('data', function(data) {
@@ -1664,6 +1681,9 @@ if (setup.hw == 'jetson') {
       notificationBroadcast('jetson_undervoltage', 'error', msg, 10*60, true, false);
     }
   });
+
+  /* Show an alert while belabox-firstboot-bootconfig is active */
+  monitorBootconfig();
 }
 
 
