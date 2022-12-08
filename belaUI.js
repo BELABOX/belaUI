@@ -196,6 +196,16 @@ async function writeTextFile(file, contents) {
   return true;
 }
 
+const execP = util.promisify(exec);
+// Promise-based exec(), but without rejections
+async function execPNR(cmd) {
+  try {
+    const res = await execP(cmd);
+    return {stdout: res.stdout, stderr: res.stderr, code: 0};
+  } catch (err) {
+    return {stdout: err.stdout, stderr: err.stderr, code: err.code};
+  }
+}
 
 /* WS helpers */
 function buildMsg(type, data, id = undefined) {
@@ -658,7 +668,6 @@ async function checkConnectivity(remoteAddr, localAddress) {
   return false;
 }
 
-const execP = util.promisify(exec);
 async function clear_default_gws() {
   try {
     while(1) {
