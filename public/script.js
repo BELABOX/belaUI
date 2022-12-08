@@ -870,11 +870,11 @@ function handleNotification(msg) {
 
 /* Log download */
 function downloadLog(msg) {
-  const blob = new Blob([msg], {type: 'text/plain'})
+  const blob = new Blob([msg.contents], {type: 'text/plain'})
 
   const a = window.document.createElement('a');
   a.href = window.URL.createObjectURL(blob);
-  a.download = 'belabox_log.txt';
+  a.download = msg.name;
   a.click();
 
   window.URL.revokeObjectURL(blob);

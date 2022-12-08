@@ -1370,8 +1370,9 @@ function handleWifi(conn, msg) {
   7 - support for config.bitrate_overlay
   8 - support for netif error
   9 - support for the get_log command
+  10 - support for the get_syslog command
 */
-const remoteProtocolVersion = 9;
+const remoteProtocolVersion = 10;
 const remoteEndpointHost = 'remote.belabox.net';
 const remoteEndpointPath = '/ws/remote';
 const remoteTimeout = 5000;
@@ -2013,15 +2014,25 @@ function command(conn, cmd) {
       resetSshPassword(conn);
       break;
     case 'get_log':
+      getLog(conn, 'belaUI');
+      break;
+    case 'get_syslog':
       getLog(conn);
       break;
   }
 }
 
-function getLog(conn) {
+function getLog(conn, service) {
   const senderId = conn.senderId;
+  let cmd = 'journalctl -b';
+  let name = 'belabox_system_log.txt';
 
-  exec("journalctl -u belaUI -b", {maxBuffer: 2*1024*1024}, function(err, stdout, stderr) {
+  if (service) {
+    cmd += ` -u ${service}`;
+    name = service.replace('belaUI', 'belabox') + '_log.txt';
+  }
+
+  exec(cmd, {maxBuffer: 10*1024*1024}, function(err, stdout, stderr) {
     if (err) {
       const msg = `Failed to fetch the log: ${err}`;
       notificationSend(conn, "log_error", "error", msg, 10);
@@ -2029,7 +2040,7 @@ function getLog(conn) {
       return;
     }
 
-    conn.send(buildMsg('log', stdout, senderId));
+    conn.send(buildMsg('log', {name, contents: stdout}, senderId));
   });
 }
 
