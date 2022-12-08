@@ -2186,7 +2186,7 @@ function doSoftwareUpdate() {
   let aptLog = '';
   let aptErr = '';
 
-  const args = "-y -o \"Dpkg::Options::=--force-confdef\" -o \"Dpkg::Options::=--force-confold\" dist-upgrade".split(' ');
+  const args = "-y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold dist-upgrade".split(' ');
   const aptUpgrade = spawn("apt-get", args);
 
   aptUpgrade.stdout.on('data', function(data) {
