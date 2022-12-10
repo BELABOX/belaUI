@@ -23,7 +23,7 @@ const { exec, execSync, spawn, spawnSync, execFileSync, execFile } = require("ch
 const fs = require('fs')
 const crypto = require('crypto');
 const path = require('path');
-const dns = require('dns');
+const { Resolver} = require('dns');
 const bcrypt = require('bcrypt');
 const process = require('process');
 const util = require('util');
@@ -453,9 +453,28 @@ function handleNetif(conn, msg) {
 /*
   DNS utils w/ a persistent cache
 */
-function resolveP(hostname, rrtype = undefined) {
+
+/*
+  dns.Resolver uses c-ares, with each instance (and the global
+  dns.resolve*() functions) mapped one-to-one to a c-ares channel
+
+  c-ares channels re-use the underlying UDP sockets for multi queries,
+  which is good for performance but the incorrect behaviour for us, as
+  it can end up trying to use stale connections long after we change
+  the default route after a network becomes unavailable
+
+  For simplicity, we create a new instance for each query unless one
+  is provided by the caller. The callers shouldn't reuse Resolver
+  instances for unrelated queries as we call resolver.cancel() on
+  timeout, which will make all pending queries time out.
+*/
+function resolveP(hostname, rrtype = undefined, resolver = undefined) {
   if (rrtype !== undefined && rrtype !== 'a' && rrtype !== 'aaaa') {
     throw(`invalid rrtype ${rrtype}`);
+  }
+
+  if (!resolver) {
+    resolver = new Resolver();
   }
 
   return new Promise(function(resolve, reject) {
@@ -463,13 +482,14 @@ function resolveP(hostname, rrtype = undefined) {
 
     if (DNS_TIMEOUT) {
       to = setTimeout(function() {
-        reject('timeout');
+        resolver.cancel();
+        reject(`DNS timeout for ${hostname}`);
       }, DNS_TIMEOUT);
     }
 
     let ipv4Res;
     if (rrtype === undefined || rrtype == 'a') {
-      dns.resolve4(hostname, {}, function(err, address) {
+      resolver.resolve4(hostname, {}, function(err, address) {
         ipv4Res = err ? null : address;
         returnResults();
       });
@@ -477,7 +497,7 @@ function resolveP(hostname, rrtype = undefined) {
 
     let ipv6Res;
     if (rrtype === undefined || rrtype == 'aaaa') {
-      dns.resolve6(hostname, {}, function(err, address) {
+      resolver.resolve6(hostname, {}, function(err, address) {
         ipv6Res = err ? null : address;
         returnResults();
       });
@@ -494,16 +514,13 @@ function resolveP(hostname, rrtype = undefined) {
         res = ipv6Res;
       }
 
-      if (to) {
-        clearTimeout(to);
-      }
       if (res) {
         if (to) {
           clearTimeout(to);
         }
         resolve(res);
       } else {
-        reject('DNS record not found');
+        reject(`DNS record not found for ${hostname}`);
       }
     }
   });
@@ -535,10 +552,13 @@ async function dnsCacheResolve(name, rrtype = undefined) {
 
   let badDns = true;
 
+  // Reuse the Resolver instance for the actual query after a succesful validation
+  const resolver = new Resolver();
+
   /* Assume that DNS resolving is broken, unless it returns
      the expected result for a known name */
   try {
-    const lookup = await resolveP(DNS_WELLKNOWN_NAME, 'a');
+    const lookup = await resolveP(DNS_WELLKNOWN_NAME, 'a', resolver);
     if (lookup.length == 1 && lookup[0] == DNS_WELLKNOWN_ADDR) {
       badDns = false;
     } else {
@@ -552,7 +572,7 @@ async function dnsCacheResolve(name, rrtype = undefined) {
     delete dnsResults[name];
   } else {
     try {
-      const res = await resolveP(name, rrtype);
+      const res = await resolveP(name, rrtype, resolver);
       dnsResults[name] = res;
 
       return {addrs: res, fromCache: false};
