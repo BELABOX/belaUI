@@ -1905,8 +1905,6 @@ function updateSrtlaIps() {
 
 let streamingProcesses = [];
 function spawnStreamingLoop(command, args, cooldown = 100, errCallback) {
-  if (!isStreaming) return;
-
   const process = spawn(command, args, { stdio: ['inherit', 'inherit', 'pipe'] });
   streamingProcesses.push(process);
 
@@ -1919,7 +1917,10 @@ function spawnStreamingLoop(command, args, cooldown = 100, errCallback) {
   }
 
   process.on('exit', function(code) {
-    setTimeout(function() {
+    process.restartTimer = setTimeout(function() {
+      // remove the old process from the list
+      removeProc(process);
+
       spawnStreamingLoop(command, args, cooldown, errCallback);
     }, cooldown);
   })
@@ -1938,7 +1939,7 @@ function start(conn, params) {
       return;
     }
 
-    isStreaming = true;
+    updateStatus(true);
 
     spawnStreamingLoop(srtlaSendExec, [
                          9000,
@@ -1990,24 +1991,72 @@ function start(conn, params) {
         notificationBroadcast('belacoder', 'error', msg, duration = 5, isPersistent = true, isDismissable = false);
       }
     });
-
-    updateStatus(true);
   });
 }
 
-function stop() {
-  updateStatus(false);
+function removeProc(process) {
+  streamingProcesses = streamingProcesses.filter(function(p) { return p !== process });
+}
 
-  // Remove the exit handlers which would restart the processes
+function stopProcess(process) {
+  if (process.restartTimer) {
+    clearTimeout(process.restartTimer);
+  }
+  process.removeAllListeners('exit');
+  if (process.exitCode === null) {
+    process.on('exit', function() {
+      removeProc(process);
+    })
+    process.kill('SIGTERM');
+  } else {
+    removeProc(process);
+  }
+}
+
+const stopCheckInterval = 10;
+function waitForAllProcessesToTerminate() {
+  if (streamingProcesses.length == 0) {
+    console.log('stop: all processes terminated');
+    updateStatus(false);
+  } else {
+    for (const p of streamingProcesses) {
+      console.log(`stop: still waiting for ${p.spawnfile} to terminate...`);
+    }
+    setTimeout(waitForAllProcessesToTerminate, stopCheckInterval);
+  }
+}
+
+function stopAll() {
+  for (const p of streamingProcesses) {
+    stopProcess(p);
+  }
+  setTimeout(waitForAllProcessesToTerminate, stopCheckInterval);
+}
+
+function stop() {
+  let foundBelacoder = false;
+
   for (const p of streamingProcesses) {
     p.removeAllListeners('exit');
+    if (p.spawnfile.match(/belacoder$/)) {
+      foundBelacoder = true;
+      console.log('stop: found the belacoder process');
+      stopProcess(p);
+      p.on('exit', function(code) {
+        console.log('stop: belacoder terminated');
+        stopAll();
+      })
+    }
   }
-  streamingProcesses = [];
 
-  spawnSync("killall", ["srtla_send"], {detached: true});
-  spawnSync("killall", ["belacoder"], {detached: true});
+  if (!foundBelacoder) {
+    console.log('stop: BUG?: belacoder not found, terminating all processes');
+    stopAll();
+  }
 }
-stop(); // make sure we didn't inherit an orphan runner process
+// make sure we didn't inherit orphan processes
+spawnSync("killall", ["belacoder"], {detached: true});
+spawnSync("killall", ["srtla_send"], {detached: true});
 
 
 /* Misc commands */

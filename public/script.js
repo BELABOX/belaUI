@@ -1061,6 +1061,7 @@ document.getElementById("startStop").addEventListener("click", () => {
     updateButton({text: "Starting..."});
     start();
   } else {
+    updateButton({text: "Stopping..."});
     stop();
   }
 });
