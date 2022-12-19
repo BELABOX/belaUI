@@ -2660,4 +2660,30 @@ function handleMessage(conn, msg, isRemote = false) {
   conn.lastActive = getms();
 }
 
-server.listen(process.env.PORT || 80);
+function startHttpServer() {
+  if (httpListenPorts.length == 0) {
+    console.log('HTTP server: no more ports left to try. Exiting...');
+    process.exit(1);
+  }
+
+  const port = httpListenPorts.shift();
+  console.log(`HTTP server: trying to start on port ${port}...`);
+  server.listen(port);
+}
+
+wss.on('error', function(e) {
+  if (e.code === 'EADDRINUSE') {
+    console.log('HTTP server: port already in use, trying the next one...');
+    startHttpServer();
+  } else {
+    console.log('HTTP server: error');
+    console.log(e);
+    process.exit(1);
+  }
+});
+
+const httpListenPorts = [80, 8080, 81];
+if (process.env.PORT) {
+  httpListenPorts.unshift(process.env.PORT);
+}
+startHttpServer();
