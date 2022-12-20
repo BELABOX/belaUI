@@ -2008,8 +2008,10 @@ function stopProcess(process) {
       removeProc(process);
     })
     process.kill('SIGTERM');
+    return false;
   } else {
     removeProc(process);
+    return true;
   }
 }
 
@@ -2041,11 +2043,18 @@ function stop() {
     if (p.spawnfile.match(/belacoder$/)) {
       foundBelacoder = true;
       console.log('stop: found the belacoder process');
-      stopProcess(p);
-      p.on('exit', function(code) {
-        console.log('stop: belacoder terminated');
+
+      if (!stopProcess(p)) {
+        // if the process is active, wait for it to exit
+        p.on('exit', function(code) {
+          console.log('stop: belacoder terminated');
+          stopAll();
+        });
+      } else {
+        // if belacoder has terminated already, skip to the next step
+        console.log('stop: belacoder already terminated');
         stopAll();
-      })
+      }
     }
   }
 
