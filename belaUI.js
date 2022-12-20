@@ -2667,7 +2667,8 @@ function startHttpServer() {
   }
 
   const port = httpListenPorts.shift();
-  console.log(`HTTP server: trying to start on port ${port}...`);
+  const desc = (typeof port == 'number') ? `port ${port}` : 'the systemd socket'
+  console.log(`HTTP server: trying to start on ${desc}...`);
   server.listen(port);
 }
 
@@ -2682,8 +2683,20 @@ wss.on('error', function(e) {
   }
 });
 
+function getSystemdSocket() {
+  if (!process.env.LISTEN_FDS) return;
+  if (process.env.LISTEN_FDS !== "1") return;
+
+  const firstSystemdSocketFd = 3;
+  return {fd: firstSystemdSocketFd};
+}
+
 const httpListenPorts = [80, 8080, 81];
 if (process.env.PORT) {
   httpListenPorts.unshift(process.env.PORT);
+}
+const systemdSock = getSystemdSocket();
+if (systemdSock){
+  httpListenPorts.unshift(systemdSock);
 }
 startHttpServer();

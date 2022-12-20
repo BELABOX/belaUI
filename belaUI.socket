@@ -1,0 +1,10 @@
+[Unit]
+Description=Listener socket for belaUI's HTTP server
+Before=nginx.service
+
+[Socket]
+ListenStream=80
+Accept=false
+
+[Install]
+WantedBy=multi-user.target
