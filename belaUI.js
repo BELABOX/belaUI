@@ -207,6 +207,9 @@ async function execPNR(cmd) {
   }
 }
 
+const readdirP = util.promisify(fs.readdir);
+
+
 /* WS helpers */
 function buildMsg(type, data, id = undefined) {
   const obj = {};
@@ -261,7 +264,7 @@ function readDirAbsPath(dir) {
   return pipelines;
 }
 
-function getPipelines() {
+async function getPipelines() {
   const ps = {};
   Object.assign(ps, readDirAbsPath(belacoderPipelinesDir + '/custom/'));
   if (setup['hw'] == 'jetson') {
@@ -269,21 +272,26 @@ function getPipelines() {
   }
   Object.assign(ps, readDirAbsPath(belacoderPipelinesDir + '/generic/'));
 
+  for (const p in ps) {
+    const props = await pipelineGetAudioProps(ps[p].path)
+    Object.assign(ps[p], props);
+  }
+
   return ps;
 }
 
-function searchPipelines(id) {
-  const pipelines = getPipelines();
-  if (pipelines[id]) return pipelines[id].path;
+async function searchPipelines(id) {
+  const pipelines = await getPipelines();
+  if (pipelines[id]) return pipelines[id];
   return null;
 }
 
 // pipeline list in the format needed by the frontend
-function getPipelineList() {
-  const pipelines = getPipelines();
+async function getPipelineList() {
+  const pipelines = await getPipelines();
   const list = {};
   for (const id in pipelines) {
-    list[id] = pipelines[id].name;
+    list[id] = {name: pipelines[id].name, asrc: pipelines[id].asrc, acodec: pipelines[id].acodec};
   }
   return list;
 }
@@ -1392,8 +1400,9 @@ function handleWifi(conn, msg) {
   8 - support for netif error
   9 - support for the get_log command
   10 - support for the get_syslog command
+  11 - support for the asrc and acodec settings
 */
-const remoteProtocolVersion = 10;
+const remoteProtocolVersion = 11;
 const remoteEndpointHost = 'remote.belabox.net';
 const remoteEndpointPath = '/ws/remote';
 const remoteTimeout = 5000;
@@ -1711,10 +1720,8 @@ if (setup.hw == 'jetson') {
 
 /* Check if there are any Cam Links plugged into a USB2 port */
 async function checkCamlinkUsb2() {
-  const readdir = util.promisify(fs.readdir);
-
   const deviceDir = '/sys/bus/usb/devices';
-  const devices = await readdir(deviceDir);
+  const devices = await readdirP(deviceDir);
   let foundUsb2 = false;
 
   for (const d of devices) {
@@ -1746,12 +1753,129 @@ async function checkCamlinkUsb2() {
     console.log('No Cam Link 4K connected via USB2.0');
   }
 }
-
-// We use an UDEV rule to send a SIGUSR2 when an Elgato USB device is plugged in or out
-process.on('SIGUSR2', checkCamlinkUsb2);
-
 // check for Cam Links on USB2 at startup
 checkCamlinkUsb2();
+
+
+/* Audio input selection and codec */
+const alsaSrcPattern = /alsasrc device=[A-Za-z0-9:]+/;
+const alsaPipelinePattern = /alsasrc device=[A-Za-z0-9:]+(.|[\s])*?mux\. *\s?/;
+
+const audioCodecPattern = /voaacenc\s+bitrate=\d+\s+!\s+aacparse\s+!/;
+const audioCodecs = {'opus': 'Opus (better quality)', 'aac': 'AAC (backwards compatibility)'};
+
+const noAudioId = "No audio";
+const defaultAudioId = "Pipeline default";
+const audioSrcAliases = {"C4K": "Cam Link 4K", "usbaudio": "USB audio"};
+
+let audioDevices = {};
+addAudioCardById(audioDevices, noAudioId);
+addAudioCardById(audioDevices, defaultAudioId);
+
+
+async function pipelineGetAudioProps(path) {
+  const props = {};
+  const contents = await readTextFile(path);
+  props.asrc = contents.match(alsaPipelinePattern) != null;
+  props.acodec = contents.match(audioCodecPattern) != null;
+  return props;
+}
+
+async function replaceAudioSettings(pipelineFile, cardId, codec) {
+  let pipeline = await readTextFile(pipelineFile);
+  if (pipeline === undefined) return;
+
+  if (cardId && cardId != defaultAudioId) {
+    if (cardId == noAudioId) {
+      pipeline = pipeline.replace(alsaPipelinePattern, '');
+    } else {
+      pipeline = pipeline.replace(alsaSrcPattern, `alsasrc device="hw:${cardId}"`);
+    }
+  }
+
+  if (codec == "opus") {
+    pipeline = pipeline.replace(audioCodecPattern, 'opusenc bitrate=128000 ! opusparse !');
+  }
+
+  const pipelineTmp = "/tmp/belacoder_pipeline";
+  if (!(await writeTextFile(pipelineTmp, pipeline))) return;
+
+  return pipelineTmp;
+}
+
+
+function getAudioSrcName(id) {
+  const name = audioSrcAliases[id];
+  if (name) return name;
+  return id;
+}
+
+function addAudioCardById(list, id) {
+  const name = getAudioSrcName(id);
+  list[name] = id;
+}
+
+async function updateAudioDevices() {
+  // Ignore the onboard audio cards
+  const exclude = ['tegrahda', 'tegrasndt210ref'];
+  // Devices to show at the top of the list
+  const priority = ['C4K', 'HDMI', 'usbaudio'];
+
+  const deviceDir = '/sys/class/sound';
+  const devices = await readdirP(deviceDir);
+  const list = {};
+  let hasCamlink = false;
+  let hasUsbAudio = false;
+
+  for (const d of devices) {
+    // Only inspect cards
+    if (!d.match(/^card/)) continue;
+
+    // Get the card's ID
+    const id = (await readTextFile(`${deviceDir}/${d}/id`)).trim();
+
+    // Skip over the IDs known not to be valid audio inputs
+    if (exclude.includes(id)) continue;
+
+    list[id] = true;
+  }
+  // First add any priority cards found
+  const sortedList = {};
+  for (const id of priority) {
+    if (list[id]) addAudioCardById(sortedList, id);
+    delete list[id];
+  }
+
+  // Then add the remaining cards in alphabetical order
+  for (const id of Object.keys(list).sort()) {
+    addAudioCardById(sortedList, id);
+  }
+
+  // Always add 'no audio' and default audio options
+  addAudioCardById(sortedList, noAudioId);
+  addAudioCardById(sortedList, defaultAudioId);
+
+  audioDevices = sortedList;
+  console.log("audio devices:");
+  console.log(audioDevices);
+
+  broadcastMsg('status', {asrcs: Object.keys(audioDevices)});
+}
+updateAudioDevices();
+
+
+/*
+  We use an UDEV rule to send a SIGUSR2 when:
+   * an Elgato USB device is plugged in or out
+   * a USB audio card is plugged in or out
+*/
+function udevDeviceUpdate() {
+  console.log("SIGUSR2");
+  checkCamlinkUsb2();
+  updateAudioDevices();
+}
+
+process.on('SIGUSR2', udevDeviceUpdate);
 
 
 /* Stream starting, stopping, management and monitoring */
@@ -1793,7 +1917,7 @@ async function removeBitrateOverlay(pipelineFile) {
 
   pipeline = pipeline.replace(/textoverlay[^!]*name=overlay[^!]*!/g, '');
   const pipelineTmp = "/tmp/belacoder_pipeline";
-  if (!writeTextFile(pipelineTmp, pipeline)) return;
+  if (!(await writeTextFile(pipelineTmp, pipeline))) return;
 
   return pipelineTmp;
 }
@@ -1808,14 +1932,39 @@ async function updateConfig(conn, params, callback) {
   // pipeline
   if (params.pipeline == undefined)
     return startError(conn, "pipeline not specified");
-  let pipeline = searchPipelines(params.pipeline);
+  let pipeline = await searchPipelines(params.pipeline);
   if (pipeline == null)
     return startError(conn, "pipeline not found");
+  let pipelineFile = pipeline.path
+
+  // audio capture device, if needed for the pipeline
+  let audioSrcId = defaultAudioId;
+  if (pipeline.asrc) {
+    if (params.asrc == undefined) {
+      return startError(conn, "audio source not specified");
+    }
+    audioSrcId = audioDevices[params.asrc];
+    if (!audioSrcId && params.asrc != config.asrc) {
+      return startError(conn, "selected audio source not found");
+    }
+  }
+
+  // audio codec, if needed for the pipeline
+  let audioCodec;
+  if (pipeline.acodec) {
+    if (params.acodec == undefined) {
+      return startError(conn, "audio codec not specified");
+    }
+    if (!audioCodecs[params.acodec]) {
+      return startError(conn, "audio codec not found");
+    }
+    audioCodec = params.acodec;
+  }
 
   // remove the bitrate overlay unless enabled in the config
   if (!params.bitrate_overlay) {
-    pipeline = await removeBitrateOverlay(pipeline);
-    if (!pipeline) return startError(conn, "failed to generate the pipeline file");
+    pipelineFile = await removeBitrateOverlay(pipelineFile);
+    if (!pipelineFile) return startError(conn, "failed to generate the pipeline file - bitrate overlay");
   }
 
   // bitrate
@@ -1861,6 +2010,25 @@ async function updateConfig(conn, params, callback) {
     dnsCacheValidate(params.srtla_addr);
   }
 
+  if (pipeline.asrc) {
+    config.asrc = params.asrc;
+    if (!audioSrcId) {
+      const audioSrcName = Object.keys(audioDevices)[0];
+      audioSrcId = audioDevices[audioSrcName];
+      const msg = `Selected audio input ${config.asrc} not found. Proceeding with ${audioSrcName} instead...`;
+      notificationSend(conn, 'asrc_not_found', 'warning', msg, 20);
+    }
+  }
+
+  if (pipeline.acodec) {
+    config.acodec = params.acodec;
+  }
+
+  pipelineFile = await replaceAudioSettings(pipelineFile, audioSrcId, audioCodec);
+  if (!pipelineFile) {
+    return startError(conn, 'failed to generate the pipeline file - audio settings');
+  }
+
   config.delay = params.delay;
   config.pipeline = params.pipeline;
   config.max_br = params.max_br;
@@ -1874,7 +2042,7 @@ async function updateConfig(conn, params, callback) {
 
   broadcastMsgExcept(conn, 'config', config);
 
-  callback(pipeline, srtlaAddr);
+  callback(pipelineFile, srtlaAddr);
 }
 
 let isStreaming = false;
@@ -2548,16 +2716,18 @@ function sendStatus(conn) {
                                 available_updates: availableUpdates,
                                 updating: softUpdateStatus,
                                 ssh: getSshStatus(conn),
-                                wifi: wifiBuildMsg()}));
+                                wifi: wifiBuildMsg(),
+                                asrcs: Object.keys(audioDevices)}));
 }
 
-function sendInitialStatus(conn) {
+async function sendInitialStatus(conn) {
   conn.send(buildMsg('config', config));
-  conn.send(buildMsg('pipelines', getPipelineList()));
+  conn.send(buildMsg('pipelines', await getPipelineList()));
   sendStatus(conn);
   conn.send(buildMsg('netif', netif));
   conn.send(buildMsg('sensors', sensors));
   conn.send(buildMsg('revisions', revisions));
+  conn.send(buildMsg('acodecs', audioCodecs));
   notificationSendPersistent(conn);
 }
 

@@ -315,6 +315,60 @@ $('#resetSshPass').click(function() {
 });
 
 
+/* Audio device / codec selection */
+let audioSrcList = [];
+function updateAudioSrcs(list) {
+  if (list !== null) {
+    audioSrcList = list;
+  }
+
+  const audioSelect = document.getElementById("audioSource");
+  audioSelect.innerText = null;
+  let asrcFound = false;
+
+  for (const card of audioSrcList) {
+    const option = document.createElement("option");
+    option.value = card;
+    option.innerText = card;
+
+    audioSelect.append(option);
+    if (config.asrc && card == config.asrc) {
+      option.selected = true;
+      asrcFound = true;
+    }
+  }
+
+  if (config.asrc && !asrcFound) {
+    const option = document.createElement("option");
+    option.innerText = config.asrc + " (unavailable)";
+    option.value = config.asrc;
+    option.selected = true;
+    audioSelect.append(option);
+  }
+}
+
+let audioCodecList = {};
+function updateAudioCodecs(list) {
+  if (list !== null) {
+    audioCodecList = list;
+  }
+
+  const audioCodec = document.getElementById("audioCodec");
+  audioCodec.innerText = null;
+
+  for (const codec in audioCodecList) {
+    const option = document.createElement("option");
+    option.value = codec;
+    option.innerText = audioCodecList[codec];
+
+    if (config.acodec && codec == config.acodec) {
+      option.selected = true;
+    }
+    audioCodec.append(option);
+  }
+}
+
+
 /* status updates */
 function updateStatus(status) {
   if (status.is_streaming !== undefined) {
@@ -361,6 +415,10 @@ function updateStatus(status) {
   if (status.wifi) {
     updateWifiState(status.wifi);
   }
+
+  if (status.asrcs) {
+    updateAudioSrcs(status.asrcs);
+  }
 }
 
 
@@ -372,6 +430,7 @@ function loadConfig(c) {
   initDelaySlider(config.delay ?? 0);
   initSrtLatencySlider(config.srt_latency ?? 2000);
   updatePipelines(null);
+  updateAudioSrcs(null);
 
   const srtlaAddr = config.srtla_addr ?? "";
   showHideRelayHint(srtlaAddr);
@@ -390,6 +449,7 @@ function loadConfig(c) {
 
 
 /* Pipelines */
+let pipelines = {};
 function updatePipelines(ps) {
   if (ps != null) {
     pipelines = ps;
@@ -401,15 +461,36 @@ function updatePipelines(ps) {
   for (const id in pipelines) {
     const option = document.createElement("option");
     option.value = id;
-    option.innerText = pipelines[id];
+    option.innerText = pipelines[id].name;
     if (config.pipeline && config.pipeline == id) {
       option.selected = true;
     }
 
     pipelinesSelect.append(option);
   }
+  pipelineSelectHandler(pipelinesSelect);
 }
 
+function pipelineSelectHandler(s) {
+  const p = pipelines[s.value];
+  if (!p) return;
+
+  if (p.asrc) {
+    $('#selectAudioSource').removeClass('d-none');
+  } else {
+    $('#selectAudioSource').addClass('d-none');
+  }
+
+  if (p.acodec) {
+    $('#selectAudioCodec').removeClass('d-none');
+  } else {
+    $('#selectAudioCodec').addClass('d-none');
+  }
+}
+
+$("#pipelines").change(function(ev) {
+  pipelineSelectHandler(ev.target);
+});
 
 /* Bitrate setting updates */
 function updateBitrate(br) {
@@ -922,6 +1003,9 @@ function handleMessage(msg) {
       case 'log':
         downloadLog(msg[type]);
         break;
+      case 'acodecs':
+        updateAudioCodecs(msg[type]);
+        break;
     }
   }
 }
@@ -933,6 +1017,12 @@ function getConfig() {
 
   let config = {};
   config.pipeline = document.getElementById("pipelines").value;
+  if (pipelines[config.pipeline].asrc) {
+    config.asrc = document.getElementById("audioSource").value;
+  }
+  if (pipelines[config.pipeline].acodec) {
+    config.acodec = document.getElementById("audioCodec").value;
+  }
   config.delay = $("#delaySlider").slider("value");
   config.max_br = maxBr;
   config.srtla_addr = document.getElementById("srtlaAddr").value;

@@ -5,4 +5,4 @@ systemctl daemon-reload &&
 systemctl restart belaUI &&
 systemctl enable belaUI.socket
 systemctl enable belaUI.service
-cp 99-belaui-check-usb-devices.rules /etc/udev/rules.d/
+cp *.rules /etc/udev/rules.d/
