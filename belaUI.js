@@ -2052,7 +2052,7 @@ async function updateConfig(conn, params, callback) {
 
   saveConfig();
 
-  broadcastMsgExcept(conn, 'config', config);
+  broadcastMsg('config', config);
 
   callback(pipelineFile, srtlaAddr);
 }
