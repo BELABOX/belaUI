@@ -1922,7 +1922,11 @@ async function removeBitrateOverlay(pipelineFile) {
   return pipelineTmp;
 }
 
+let updateConfigTimer;
+
 async function updateConfig(conn, params, callback) {
+  updateConfigTimer = undefined;
+
   // delay
   if (params.delay == undefined)
     return startError(conn, "audio delay not specified");
@@ -1936,18 +1940,6 @@ async function updateConfig(conn, params, callback) {
   if (pipeline == null)
     return startError(conn, "pipeline not found");
   let pipelineFile = pipeline.path
-
-  // audio capture device, if needed for the pipeline
-  let audioSrcId = defaultAudioId;
-  if (pipeline.asrc) {
-    if (params.asrc == undefined) {
-      return startError(conn, "audio source not specified");
-    }
-    audioSrcId = audioDevices[params.asrc];
-    if (!audioSrcId && params.asrc != config.asrc) {
-      return startError(conn, "selected audio source not found");
-    }
-  }
 
   // audio codec, if needed for the pipeline
   let audioCodec;
@@ -1990,6 +1982,32 @@ async function updateConfig(conn, params, callback) {
   if (params.srtla_port <= 0 || params.srtla_port > 0xFFFF)
     return startError(conn, "invalid SRTLA port " + params.srtla_port);
 
+  // audio capture device, if needed for the pipeline
+  let audioSrcId = defaultAudioId;
+  if (pipeline.asrc) {
+    if (params.asrc == undefined) {
+      return startError(conn, "audio source not specified");
+    }
+    audioSrcId = audioDevices[params.asrc];
+    if (!audioSrcId && params.asrc != config.asrc) {
+      return startError(conn, "selected audio source not found");
+    }
+
+    /* If the audio device is missing, then recheck every second or
+       until the stream is stopped
+       Case only reachable if the previously used audio source was
+       selected, but it's not currently available */
+    if (!audioSrcId) {
+      const msg = `Selected audio input '${config.asrc}' is unavailable. Waiting for it before starting the stream...`;
+      notificationBroadcast('asrc_not_found', 'warning', msg, 2, true, false);
+
+      updateConfigTimer = setTimeout(function() {
+        updateConfig(conn, params, callback);
+      }, 1000);
+      return;
+    }
+  }
+
   // resolve the srtla hostname
   let srtlaAddr = params.srtla_addr;
   try {
@@ -2010,23 +2028,17 @@ async function updateConfig(conn, params, callback) {
     dnsCacheValidate(params.srtla_addr);
   }
 
+  pipelineFile = await replaceAudioSettings(pipelineFile, audioSrcId, audioCodec);
+  if (!pipelineFile) {
+    return startError(conn, 'failed to generate the pipeline file - audio settings');
+  }
+
   if (pipeline.asrc) {
     config.asrc = params.asrc;
-    if (!audioSrcId) {
-      const audioSrcName = Object.keys(audioDevices)[0];
-      audioSrcId = audioDevices[audioSrcName];
-      const msg = `Selected audio input ${config.asrc} not found. Proceeding with ${audioSrcName} instead...`;
-      notificationSend(conn, 'asrc_not_found', 'warning', msg, 20);
-    }
   }
 
   if (pipeline.acodec) {
     config.acodec = params.acodec;
-  }
-
-  pipelineFile = await replaceAudioSettings(pipelineFile, audioSrcId, audioCodec);
-  if (!pipelineFile) {
-    return startError(conn, 'failed to generate the pipeline file - audio settings');
   }
 
   config.delay = params.delay;
@@ -2101,13 +2113,12 @@ function start(conn, params) {
   }
 
   const senderId = conn.senderId;
+  updateStatus(true);
   updateConfig(conn, params, function(pipeline, srtlaAddr) {
     if (genSrtlaIpList() < 1) {
       startError(conn, "Failed to start, no available network connections", senderId);
       return;
     }
-
-    updateStatus(true);
 
     spawnStreamingLoop(srtlaSendExec, [
                          9000,
@@ -2204,6 +2215,18 @@ function stopAll() {
 }
 
 function stop() {
+  if (updateConfigTimer) {
+    clearTimeout(updateConfigTimer);
+    updateConfigTimer = undefined;
+
+    if (streamingProcesses.length == 0) {
+      updateStatus(false);
+      return;
+    }
+
+    console.log('stop: BUG?: found both a timer and running processes');
+  }
+
   let foundBelacoder = false;
 
   for (const p of streamingProcesses) {
