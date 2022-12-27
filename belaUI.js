@@ -2390,7 +2390,7 @@ function parseUpgradeDownloadSize(text) {
 }
 
 // Show an update notification if there are pending updates to packages matching this list
-const belaboxPackages = [
+const belaboxPackageList = [
   'belabox',
   'belacoder',
   'belaui',
@@ -2399,13 +2399,13 @@ const belaboxPackages = [
   'l4t'
 ];
 // Reboot instead of just restarting belaUI if we've updated packages matching this list
-const rebootPackages = [
+const rebootPackageList = [
   'l4t',
   'belabox-linux-tegra',
   'belabox-network-config'
 ];
 function packageListIncludes(list, includes) {
-  for (const p of belaboxPackages) {
+  for (const p of includes) {
     if (list.includes(p)) return true;
   }
   return false;
@@ -2436,7 +2436,7 @@ function parseAptUpgradeSummary(stdout) {
     downloadSize = parseUpgradeDownloadSize(stdout);
 
     packageList = parseAptUpgradedPackages(stdout);
-    if (packageListIncludes(packageList, belaboxPackages)) {
+    if (packageListIncludes(packageList, belaboxPackageList)) {
       belaboxPackages = true;
     }
   }
@@ -2570,7 +2570,7 @@ function doSoftwareUpdate() {
         sendUpdate = true;
 
         let packageList = parseAptUpgradedPackages(aptLog);
-        if (packageListIncludes(packageList, rebootPackages)) {
+        if (packageListIncludes(packageList, rebootPackageList)) {
           rebootAfterUpgrade = true;
         }
       }
