@@ -161,6 +161,7 @@ wss.on('connection', function connection(conn) {
   if (!config.password_hash) {
     conn.send(buildMsg('status', {set_password: true}));
   }
+  notificationSendPersistent(conn, false);
 
   conn.on('message', function incoming(msg) {
     try {
@@ -218,16 +219,16 @@ function buildMsg(type, data, id = undefined) {
   return JSON.stringify(obj);
 }
 
-function broadcastMsgLocal(type, data, activeMin = 0, except = undefined) {
+function broadcastMsgLocal(type, data, activeMin = 0, except = undefined, authedOnly = true) {
   const msg = buildMsg(type, data);
   for (const c of wss.clients) {
-    if (c !== except && c.lastActive >= activeMin && c.isAuthed) c.send(msg);
+    if (c !== except && c.lastActive >= activeMin && (authedOnly === false || c.isAuthed)) c.send(msg);
   }
   return msg;
 }
 
-function broadcastMsg(type, data, activeMin = 0) {
-  const msg = broadcastMsgLocal(type, data, activeMin);
+function broadcastMsg(type, data, activeMin = 0, authedOnly = true) {
+  const msg = broadcastMsgLocal(type, data, activeMin, undefined, authedOnly);
   if (remoteWs && remoteWs.isAuthed) {
     remoteWs.send(msg);
   }
@@ -1552,7 +1553,18 @@ function setRemoteKey(key) {
 */
 let persistentNotifications = new Map();
 
-function notificationSend(conn, name, type, msg, duration = 0, isPersistent = false, isDismissable = true) {
+function buildNotificationMsg(n, duration) {
+  return {
+    name: n.name,
+    type: n.type,
+    msg: n.msg,
+    is_dismissable: n.isDismissable,
+    is_persistent: n.isPersistent,
+    duration
+  }
+}
+
+function notificationSend(conn, name, type, msg, duration = 0, isPersistent = false, isDismissable = true, authedOnly = true) {
   if (isPersistent && conn != undefined) {
     console.log("error: attempted to send persistent unicast notification");
     return false;
@@ -1562,9 +1574,10 @@ function notificationSend(conn, name, type, msg, duration = 0, isPersistent = fa
                          name,
                          type,
                          msg,
-                         is_dismissable: isDismissable,
-                         is_persistent: isPersistent,
-                         duration
+                         isDismissable,
+                         isPersistent,
+                         duration,
+                         authedOnly
                        };
   let doSend = true;
   if (isPersistent) {
@@ -1590,26 +1603,27 @@ function notificationSend(conn, name, type, msg, duration = 0, isPersistent = fa
   if (!doSend) return;
 
   const notificationMsg = {
-                            show: [notification]
+                            show: [buildNotificationMsg(notification, duration)]
                           };
   if (conn) {
     conn.send(buildMsg('notification', notificationMsg, conn.senderId));
   } else {
-    broadcastMsg('notification', notificationMsg);
+    broadcastMsg('notification', notificationMsg, 0, authedOnly);
   }
 
   return true;
 }
 
-function notificationBroadcast(name, type, msg, duration = 0, isPersistent = false, isDismissable = true) {
-  notificationSend(undefined, name, type, msg, duration, isPersistent, isDismissable);
+function notificationBroadcast(name, type, msg, duration = 0, isPersistent = false, isDismissable = true, authedOnly = true) {
+  notificationSend(undefined, name, type, msg, duration, isPersistent, isDismissable, authedOnly);
 }
 
 function notificationRemove(name) {
+  const n = persistentNotifications.get(name);
   persistentNotifications.delete(name);
 
   const msg = { remove: [name] };
-  broadcastMsg('notification', msg);
+  broadcastMsg('notification', msg, 0, (!n || n.authedOnly));
 }
 
 function _notificationIsLive(n) {
@@ -1630,19 +1644,14 @@ function notificationExists(name) {
   if (_notificationIsLive(pn) !== false) return pn;
 }
 
-function notificationSendPersistent(conn) {
+function notificationSendPersistent(conn, isAuthed = false) {
   const notifications = [];
   for (const n of persistentNotifications) {
+    if (!isAuthed && n[1].authedOnly !== false) continue;
+
     const remainingDuration = _notificationIsLive(n[1]);
     if (remainingDuration !== false) {
-      notifications.push({
-        name: n[1].name,
-        type: n[1].type,
-        msg: n[1].msg,
-        is_dismissable: n[1].is_dismissable,
-        is_persistent: n[1].is_persistent,
-        duration: remainingDuration
-      });
+      notifications.push(buildNotificationMsg(n[1], remainingDuration));
     }
   }
 
@@ -1701,7 +1710,7 @@ async function monitorBootconfig() {
     } else {
       if (!notificationExists('bootconfig')) {
         const msg = "Don't reset or unplug the system. The bootloader is being updated in the background and doing so may brick your board..."
-        notificationBroadcast('bootconfig', 'warning', msg, 0, true, false);
+        notificationBroadcast('bootconfig', 'warning', msg, 0, true, false, false);
       }
 
       setTimeout(monitorBootconfig, 2000);
@@ -2762,7 +2771,7 @@ async function sendInitialStatus(conn) {
   conn.send(buildMsg('sensors', sensors));
   conn.send(buildMsg('revisions', revisions));
   conn.send(buildMsg('acodecs', audioCodecs));
-  notificationSendPersistent(conn);
+  notificationSendPersistent(conn, true);
 }
 
 function connAuth(conn, sendToken) {
