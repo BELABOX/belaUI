@@ -1682,19 +1682,30 @@ if (setup['hw'] == 'jetson') {
   setInterval(updateSensorsJetson, 1000);
 }
 
-async function isBootconfigEnabled() {
-  const isEnabled = await execPNR("systemctl is-enabled belabox-firstboot-bootconfig")
+async function isServiceEnabled(service) {
+  const isEnabled = await execPNR(`systemctl is-enabled ${service}`);
   return (isEnabled.code === 0);
 }
 
-async function monitorBootconfig() {
-  if (await isBootconfigEnabled()) {
-    if (!notificationExists('bootconfig')) {
-      const msg = "Don't reset or unplug the system. The bootloader is being updated in the background and doing so may brick your board..."
-      notificationBroadcast('bootconfig', 'warning', msg, 0, true, false);
-    }
+async function isServiceFailed(service) {
+  const isFailed = await execPNR(`systemctl is-failed ${service}`)
+  return (isFailed.code === 0);
+}
 
-    setTimeout(monitorBootconfig, 2000);
+const bootconfigService = 'belabox-firstboot-bootconfig';
+async function monitorBootconfig() {
+  if (await isServiceEnabled(bootconfigService)) {
+    if (await isServiceFailed(bootconfigService)) {
+      const msg = "Updating the bootloader failed. Please download the system log from the Advanced / developer menu";
+      notificationBroadcast('bootconfig', 'error', msg, 0, true, false);
+    } else {
+      if (!notificationExists('bootconfig')) {
+        const msg = "Don't reset or unplug the system. The bootloader is being updated in the background and doing so may brick your board..."
+        notificationBroadcast('bootconfig', 'warning', msg, 0, true, false);
+      }
+
+      setTimeout(monitorBootconfig, 2000);
+    }
   } else {
     notificationRemove('bootconfig');
   }
