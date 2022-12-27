@@ -2800,11 +2800,24 @@ function tryAuth(conn, msg) {
   }
 }
 
+function stripPasswords(obj) {
+  if (obj.constructor !== Object) return obj;
+
+  const copy = {...obj};
+  for (const p in copy) {
+    if (p === 'password') {
+      copy[p] = '<password not logged>';
+    } else if (copy[p].constructor === Object) {
+      copy[p] = stripPasswords(copy[p]);
+    }
+  }
+  return copy;
+}
 
 function handleMessage(conn, msg, isRemote = false) {
   // log all received messages except for keepalives
   if (Object.keys(msg).length > 1 || msg.keepalive === undefined) {
-    console.log(msg);
+    console.log(stripPasswords(msg));
   }
 
   if (!isRemote) {
