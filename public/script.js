@@ -39,6 +39,7 @@ function tryConnect() {
     ws = c;
 
     hideError();
+    $('#notifications').empty();
     tryTokenAuth();
     updateNetact(true);
   });
