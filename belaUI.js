@@ -1814,7 +1814,7 @@ async function replaceAudioSettings(pipelineFile, cardId, codec) {
   }
 
   if (codec == "opus") {
-    pipeline = pipeline.replace(audioCodecPattern, 'opusenc bitrate=128000 ! opusparse !');
+    pipeline = pipeline.replace(audioCodecPattern, 'audioresample quality=10 sinc-filter-mode=1 ! opusenc bitrate=128000 ! opusparse !');
   }
 
   const pipelineTmp = "/tmp/belacoder_pipeline";
