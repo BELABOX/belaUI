@@ -1950,8 +1950,10 @@ async function updateConfig(conn, params, callback) {
   // delay
   if (params.delay == undefined)
     return startError(conn, "audio delay not specified");
-  if (params.delay < -2000 || params.delay > 2000)
-    return startError(conn, "invalid delay " + params.delay);
+  const delayTmp = parseInt(params.delay);
+  if (delayTmp != params.delay || delayTmp < -2000 || delayTmp > 2000)
+    return startError(conn, `invalid delay '${params.delay}'`);
+  params.delay = delayTmp;
 
   // pipeline
   if (params.pipeline == undefined)
@@ -1987,8 +1989,10 @@ async function updateConfig(conn, params, callback) {
   // srt latency
   if (params.srt_latency == undefined)
     return startError(conn, "SRT latency not specified");
-  if (params.srt_latency < 100 || params.srt_latency > 10000)
-    return startError(conn, "invalid SRT latency " + params.srt_latency + " ms");
+  const latencyTmp = parseInt(params.srt_latency);
+  if (latencyTmp != params.srt_latency || latencyTmp < 100 || latencyTmp > 10000)
+    return startError(conn, `invalid SRT latency '${params.srt_latency}' ms`);
+  params.srt_latency = latencyTmp;
 
   // srt streamid
   if (params.srt_streamid == undefined)
@@ -1997,10 +2001,13 @@ async function updateConfig(conn, params, callback) {
   // srtla addr & port
   if (params.srtla_addr == undefined)
     return startError(conn, "SRTLA address not specified");
+  params.srtla_addr = params.srtla_addr.trim();
   if (params.srtla_port == undefined)
     return startError(conn, "SRTLA port not specified");
-  if (params.srtla_port <= 0 || params.srtla_port > 0xFFFF)
-    return startError(conn, "invalid SRTLA port " + params.srtla_port);
+  const portTmp = parseInt(params.srtla_port);
+  if (portTmp != params.srtla_port || portTmp <= 0 || portTmp > 0xFFFF)
+    return startError(conn, `invalid SRTLA port '${params.srtla_port}'`);
+  params.srtla_port = portTmp;
 
   // audio capture device, if needed for the pipeline
   let audioSrcId = defaultAudioId;
