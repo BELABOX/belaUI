@@ -1910,7 +1910,11 @@ function startError(conn, msg, id = undefined) {
   if (id !== undefined) {
     conn.senderId = originalId;
   }
-  conn.send(buildMsg('status', {is_streaming: false}));
+
+  if (!updateStatus(false)) {
+    conn.send(buildMsg('status', {is_streaming: false}));
+  }
+
   return false;
 }
 
@@ -2086,8 +2090,12 @@ async function updateConfig(conn, params, callback) {
 
 let isStreaming = false;
 function updateStatus(status) {
-  isStreaming = status;
-  broadcastMsg('status', {is_streaming: isStreaming});
+  if (status != isStreaming) {
+    isStreaming = status;
+    broadcastMsg('status', {is_streaming: isStreaming});
+    return true;
+  }
+  return false;
 }
 
 function genSrtlaIpList() {
