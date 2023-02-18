@@ -57,3 +57,31 @@ td.security {
     display: none;
   }
 }
+
+/* Dark mode theme */
+
+body.dark {
+  background: #1e2326;
+  color: #FFF;
+}
+
+body.dark .card {
+  background: #1e2326;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+body.dark .table {
+  color: #FFF;
+}
+
+body.dark .form-control, body.dark .ui-widget-content, body.dark .custom-select {
+  background-color: #E0E0E0;
+}
+
+body.dark .btn-outline-secondary {
+  color: #E0E0E0;
+}
+
+body.dark .text-secondary {
+  color: #9ca5ad !important;
+}

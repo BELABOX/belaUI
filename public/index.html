@@ -56,7 +56,7 @@
         </button>
       </div>
 
-      <div id="login" class="container card mt-4 p-2 d-none">
+      <div id="login" class="container card mt-4 mb-2 p-2 d-none">
         <form>
           <input type="password" id="password" class="form-control input_user" placeholder="password">
           <label class="mt-2"><input type="checkbox" class="rememberMe"> remember me</label>
@@ -64,7 +64,7 @@
         </form>
       </div>
 
-      <div id="initialPasswordForm" class="container p-0 card mt-4 d-none">
+      <div id="initialPasswordForm" class="container p-0 card mt-4 mb-2 d-none">
         <div class="card-header bg-success text-center text-white">Initial BELABOX setup</div>
         <div class="card-body">
 
@@ -86,7 +86,7 @@
         </div>
       </div>
 
-      <div id="main" class="d-none">
+      <div id="main" class="d-none mb-2">
         <div class="mb-4">
           <button type="button" id="startStop" class="btn btn-lg btn-block mb-2 btn-netact">
             Start
@@ -362,6 +362,15 @@
 
         </div> <!-- #settings -->
       </div> <!-- #main -->
+
+      <div class="text-center small d-none" id="themeSelector">
+        Theme:
+        <select>
+          <option value="auto">Auto</option>
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+        </select>
+      </div>
     </div> <!-- .container -->
 
     <script type="text/javascript" src="/jquery-3.5.1.js"></script>
