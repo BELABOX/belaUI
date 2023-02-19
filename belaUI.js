@@ -2123,6 +2123,7 @@ async function updateConfig(conn, params, callback) {
     callback(pipelineFile, srtlaAddr);
   } else {
     asrcScheduleRetry(pipelineFile, callback, conn);
+    updateStatus(true);
   }
 }
 
@@ -2186,12 +2187,12 @@ function start(conn, params) {
   }
 
   const senderId = conn.senderId;
-  updateStatus(true);
   updateConfig(conn, params, function(pipeline, srtlaAddr) {
     if (genSrtlaIpList() < 1) {
       startError(conn, "Failed to start, no available network connections", senderId);
       return;
     }
+    updateStatus(true);
 
     spawnStreamingLoop(srtlaSendExec, [
                          9000,
