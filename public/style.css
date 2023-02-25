@@ -71,15 +71,15 @@ body.dark .card {
 }
 
 body.dark .table {
-  color: #FFF;
+  color: #fff;
 }
 
 body.dark .form-control, body.dark .ui-widget-content, body.dark .custom-select {
-  background-color: #E0E0E0;
+  background-color: #eee;
 }
 
 body.dark .btn-outline-secondary {
-  color: #E0E0E0;
+  color: #eee;
 }
 
 body.dark .text-secondary {
