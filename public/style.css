@@ -85,3 +85,15 @@ body.dark .btn-outline-secondary {
 body.dark .text-secondary {
   color: #9ca5ad !important;
 }
+
+body.dark .modal-content {
+  background-color: #1e2326;
+}
+
+body.dark .close {
+  color: #fff;
+}
+
+body.dark .table-hover tbody tr:hover {
+  color: #aaa;
+}
