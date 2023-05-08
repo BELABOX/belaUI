@@ -1750,12 +1750,16 @@ async function checkCamlinkUsb2() {
       if (vendor != "0fd9\n") continue;
 
       /*
-        With my unit it would appear that product ID 0x66 is used for USB3.0 and
-        0x67 is used for USB2.0, but I'm not sure if this is consistent between
-        different revisions. So we'll check bcdUSB (aka version) for both
+        With my 20GAM9901 unit it would appear that product ID 0x66 is used for
+        USB3.0 and 0x67 is used for USB2.0, but I'm not sure if this is consistent
+        between different revisions. So we'll check bcdUSB (aka version) for both
+
+        Additional product IDs for 20GAM9902 thanks to chubbybunny627: 0x7b for
+        USB 3.0 and 0x85 for USB 2.0
       */
-      const product = await readTextFile(`${deviceDir}/${d}/idProduct`);
-      if (product != "0066\n" && product != "0067\n") continue;
+      const product = (await readTextFile(`${deviceDir}/${d}/idProduct`)).trim();
+      const knownCamLinkPids = ['0066', '0067', '007b', '0085'];
+      if (!knownCamLinkPids.includes(product)) continue;
 
       const version = await readTextFile(`${deviceDir}/${d}/version`);
       if (!version.match('3.00')) {

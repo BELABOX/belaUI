@@ -6,8 +6,8 @@ ACTION=="remove", GOTO="signal_belaui"
 
 ACTION!="change", GOTO="end"
 
-# the id defaults to C4K on my system, but I'm unsure if this is always the case so set it anyway
-ENV{ID_VENDOR_ID}=="0fd9", ENV{ID_MODEL_ID}=="006[6,7]", ATTR{id}="C4K", GOTO="signal_belaui"
+# the Cam Link 4K's audio id defaults to C4K - don't modify it
+ATTR{id}=="C4K", GOTO="signal_belaui"
 
 # set the id for the first USB audio card that's not a camlink 4K
 ATTR{id}="usbaudio"
