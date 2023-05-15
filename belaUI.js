@@ -2509,7 +2509,7 @@ function parseAptUpgradeSummary(stdout) {
 }
 
 async function getSoftwareUpdateSize() {
-  if (isStreaming || isUpdating() || aptGetUpdating) return;
+  if (isStreaming || isUpdating() || aptGetUpdating) return 'busy';
 
   // First see if any packages can be upgraded by dist-upgrade
   let upgrade = await execPNR("apt-get dist-upgrade --assume-no");
@@ -2535,6 +2535,8 @@ async function getSoftwareUpdateSize() {
 
   availableUpdates = {package_count: res.upgradeCount, download_size: res.downloadSize};
   broadcastMsg('status', {available_updates: availableUpdates});
+
+  return null;
 }
 
 function checkForSoftwareUpdates(callback) {
@@ -2563,21 +2565,21 @@ function checkForSoftwareUpdates(callback) {
 let nextCheckForSoftwareUpdates = getms();
 let nextCheckForSoftwareUpdatesTimer;
 function periodicCheckForSoftwareUpdates() {
-  if (nextCheckForSoftwareUpdates) {
-    clearTimeout(nextCheckForSoftwareUpdates);
-    nextCheckForSoftwareUpdates = undefined;
+  if (nextCheckForSoftwareUpdatesTimer) {
+    clearTimeout(nextCheckForSoftwareUpdatesTimer);
+    nextCheckForSoftwareUpdatesTimer = undefined;
   }
 
   const ms = getms();
   if (ms < nextCheckForSoftwareUpdates) {
-      nextCheckForSoftwareUpdatesTimer = setTimeout(periodicCheckForSoftwareUpdates,
-                                                            nextCheckForSoftwareUpdates-ms);
+    nextCheckForSoftwareUpdatesTimer = setTimeout(periodicCheckForSoftwareUpdates,
+                                                  nextCheckForSoftwareUpdates-ms);
     return;
   }
 
-  checkForSoftwareUpdates(function(err, failures) {
+  checkForSoftwareUpdates(async function(err, failures) {
     if (err === null) {
-      getSoftwareUpdateSize();
+      err = await getSoftwareUpdateSize();
     }
     // one hour delay after a succesful check
     let delay = oneHour;
@@ -2591,8 +2593,8 @@ function periodicCheckForSoftwareUpdates() {
         delay = oneMinute;
       }
     }
-    nextPeriodicCheckForSoftwareUpdates = getms() + delay;
-    setTimeout(periodicCheckForSoftwareUpdates, delay);
+    nextCheckForSoftwareUpdates = getms() + delay;
+    nextCheckForSoftwareUpdatesTimer = setTimeout(periodicCheckForSoftwareUpdates, delay);
   });
 }
 if (setup.apt_update_enabled) {
