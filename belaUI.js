@@ -2281,6 +2281,8 @@ function waitForAllProcessesToTerminate() {
   if (streamingProcesses.length == 0) {
     console.log('stop: all processes terminated');
     updateStatus(false);
+
+    periodicCheckForSoftwareUpdates();
   } else {
     for (const p of streamingProcesses) {
       console.log(`stop: still waiting for ${p.spawnfile} to terminate...`);
@@ -2558,7 +2560,21 @@ function checkForSoftwareUpdates(callback) {
   });
 }
 
+let nextCheckForSoftwareUpdates = getms();
+let nextCheckForSoftwareUpdatesTimer;
 function periodicCheckForSoftwareUpdates() {
+  if (nextCheckForSoftwareUpdates) {
+    clearTimeout(nextCheckForSoftwareUpdates);
+    nextCheckForSoftwareUpdates = undefined;
+  }
+
+  const ms = getms();
+  if (ms < nextCheckForSoftwareUpdates) {
+      nextCheckForSoftwareUpdatesTimer = setTimeout(periodicCheckForSoftwareUpdates,
+                                                            nextCheckForSoftwareUpdates-ms);
+    return;
+  }
+
   checkForSoftwareUpdates(function(err, failures) {
     if (err === null) {
       getSoftwareUpdateSize();
@@ -2575,6 +2591,7 @@ function periodicCheckForSoftwareUpdates() {
         delay = oneMinute;
       }
     }
+    nextPeriodicCheckForSoftwareUpdates = getms() + delay;
     setTimeout(periodicCheckForSoftwareUpdates, delay);
   });
 }
