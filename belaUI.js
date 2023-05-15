@@ -330,20 +330,21 @@ function updateNetif() {
         let inetAddr = int.match(/inet (\d+\.\d+\.\d+\.\d+)/);
         if (inetAddr) inetAddr = inetAddr[1];
 
+        const flags = int.match(/flags=\d+<([A-Z,]+)>/)[1].split(',');
+        const isRunning = flags.includes('RUNNING');
+
         // update the list of WiFi devices
         if (name && name.match('^wlan')) {
           let hwAddr = int.match(/ether ([0-9a-f:]+)/);
           if (hwAddr) {
-            wiFiDeviceListAdd(name, hwAddr[1], inetAddr);
+            wiFiDeviceListAdd(name, hwAddr[1], isRunning ? inetAddr : null);
           }
         }
 
         if (name == 'lo' || name.match('^docker') || name.match('^l4tbr')) continue;
 
         if (!inetAddr) continue;
-
-        const flags = int.match(/flags=\d+<([A-Z,]+)>/)[1].split(',');
-        if (!flags.includes('RUNNING')) continue;
+        if (!isRunning) continue;
 
         let txBytes = int.match(/TX packets \d+  bytes \d+/);
         txBytes = parseInt(txBytes[0].split(' ').pop());
@@ -1147,6 +1148,8 @@ function wifiScheduleScanUpdates() {
   setTimeout(wifiUpdateScanResult, 3000);
   setTimeout(wifiUpdateScanResult, 5000);
   setTimeout(wifiUpdateScanResult, 10000);
+  setTimeout(wifiUpdateScanResult, 15000);
+  setTimeout(wifiUpdateScanResult, 20000);
 }
 
 let unavailableDeviceRetryExpiry = 0;
@@ -1172,7 +1175,7 @@ function wifiUpdateDevices() {
   for (const networkDevice of networkDevices) {
     try {
       const [ifname, type, state, connUuid] = nmcliParseSep(networkDevice);
-      const conn = (connUuid != '') ? connUuid : null;
+      const conn = (connUuid != '' && wifiDeviceHwAddr[ifname].inetAddr) ? connUuid : null;
 
       if (type !== "wifi") continue;
       if (state == "unavailable") {
@@ -1228,6 +1231,7 @@ function wifiUpdateDevices() {
   }
   if (statusChange) {
     wifiUpdateScanResult();
+    wifiScheduleScanUpdates();
   }
   if (newDevices || statusChange) {
     wifiBroadcastState();
