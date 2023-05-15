@@ -873,9 +873,15 @@ function wiFiDeviceListEndUpdate() {
   return wiFiDeviceListIsModified;
 }
 
-function wifiDeviceListGetAddr(ifname) {
+function wifiDeviceListGetHwAddr(ifname) {
   if (wifiDeviceHwAddr[ifname]) {
     return wifiDeviceHwAddr[ifname].hwAddr;
+  }
+}
+
+function wifiDeviceListGetInetAddr(ifname) {
+  if (wifiDeviceHwAddr[ifname]) {
+    return wifiDeviceHwAddr[ifname].inetAddr;
   }
 }
 
@@ -1122,7 +1128,7 @@ function wifiUpdateScanResult() {
 
     if (ssid == null || ssid == "") continue;
 
-    const hwAddr = wifiDeviceListGetAddr(device);
+    const hwAddr = wifiDeviceListGetHwAddr(device);
     if (!wifiIfs[hwAddr] || (active != 'yes' && wifiIfs[hwAddr].available.has(ssid))) continue;
 
     wifiIfs[hwAddr].available.set(ssid, {
@@ -1175,7 +1181,6 @@ function wifiUpdateDevices() {
   for (const networkDevice of networkDevices) {
     try {
       const [ifname, type, state, connUuid] = nmcliParseSep(networkDevice);
-      const conn = (connUuid != '' && wifiDeviceHwAddr[ifname].inetAddr) ? connUuid : null;
 
       if (type !== "wifi") continue;
       if (state == "unavailable") {
@@ -1183,7 +1188,8 @@ function wifiUpdateDevices() {
         continue;
       }
 
-      const hwAddr = wifiDeviceListGetAddr(ifname);
+      const conn = (connUuid != '' && wifiDeviceListGetInetAddr(ifname)) ? connUuid : null;
+      const hwAddr = wifiDeviceListGetHwAddr(ifname);
       if (!hwAddr) continue;
 
       if (wifiIfs[hwAddr]) {
