@@ -1795,7 +1795,7 @@ checkCamlinkUsb2();
 const alsaSrcPattern = /alsasrc device=[A-Za-z0-9:]+/;
 const alsaPipelinePattern = /alsasrc device=[A-Za-z0-9:]+(.|[\s])*?mux\. *\s?/;
 
-const audioCodecPattern = /voaacenc\s+bitrate=\d+\s+!\s+aacparse\s+!/;
+const audioCodecPattern = /voaacenc\s+bitrate=(\d+)\s+!\s+aacparse\s+!/;
 const audioCodecs = {'opus': 'Opus (better quality)', 'aac': 'AAC (backwards compatibility)'};
 
 const noAudioId = "No audio";
@@ -1828,7 +1828,8 @@ async function replaceAudioSettings(pipelineFile, cardId, codec) {
   }
 
   if (codec == "opus") {
-    pipeline = pipeline.replace(audioCodecPattern, 'audioresample quality=10 sinc-filter-mode=1 ! opusenc bitrate=128000 ! opusparse !');
+    const br = pipeline.match(audioCodecPattern)[1];
+    pipeline = pipeline.replace(audioCodecPattern, `audioresample quality=10 sinc-filter-mode=1 ! opusenc bitrate=${br} ! opusparse !`);
   }
 
   const pipelineTmp = "/tmp/belacoder_pipeline";
