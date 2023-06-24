@@ -2528,7 +2528,11 @@ async function getSoftwareUpdateSize() {
   if (res.upgradeCount == 0) {
     aptHeldBackPackages = parseAptPackageList(upgrade.stdout, "The following packages have been kept back:\n");
     if (aptHeldBackPackages) {
-      upgrade = await execPNR("apt-get upgrade --assume-no " + aptHeldBackPackages);
+      if (setup['hw'] == 'jetson' && aptHeldBackPackages === 'belabox') {
+        // This is a special case for upgrading from an old installation using the stock jetson kernel
+        aptHeldBackPackages = 'belabox belabox-linux-tegra';
+      }
+      upgrade = await execPNR("apt-get install --assume-no " + aptHeldBackPackages);
       res = parseAptUpgradeSummary(upgrade.stdout);
     }
   } else {
@@ -2642,7 +2646,7 @@ function doSoftwareUpdate() {
 
   let args = "-y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold ";
   if (aptHeldBackPackages) {
-    args += "upgrade " + aptHeldBackPackages;
+    args += "install " + aptHeldBackPackages;
   } else {
     args += "dist-upgrade";
   }
