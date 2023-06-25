@@ -1672,6 +1672,7 @@ function notificationSendPersistent(conn, isAuthed = false) {
 
 /* Hardware monitoring */
 let sensors = {};
+const systemStartTime = Date.now();
 function updateSensorsJetson() {
   try {
     let socVoltage = fs.readFileSync('/sys/bus/i2c/drivers/ina3221x/6-0040/iio:device0/in_voltage0_input', 'utf8');
@@ -1694,8 +1695,13 @@ function updateSensorsJetson() {
     sensors['SoC temperature'] = socTemp;
   } catch (err) {};
 
+  try {
+    sensors['System uptime'] = `${new Date(Date.now() - systemStartTime).toISOString().substring(11, 19)}`;
+  } catch (error) {};
+
   broadcastMsg('sensors', sensors, getms() - ACTIVE_TO);
 }
+
 if (setup['hw'] == 'jetson') {
   updateSensorsJetson();
   setInterval(updateSensorsJetson, 1000);
