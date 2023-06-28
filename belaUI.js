@@ -268,9 +268,7 @@ function readDirAbsPath(dir) {
 async function getPipelines() {
   const ps = {};
   Object.assign(ps, readDirAbsPath(belacoderPipelinesDir + '/custom/'));
-  if (setup.hw == 'jetson') {
-    Object.assign(ps, readDirAbsPath(belacoderPipelinesDir + '/jetson/'));
-  }
+  Object.assign(ps, readDirAbsPath(belacoderPipelinesDir + `/${setup.hw}/`));
   Object.assign(ps, readDirAbsPath(belacoderPipelinesDir + '/generic/'));
 
   for (const p in ps) {
