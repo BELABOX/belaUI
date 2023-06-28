@@ -1672,6 +1672,16 @@ function notificationSendPersistent(conn, isAuthed = false) {
 
 /* Hardware monitoring */
 let sensors = {};
+
+function updateSensorThermal(id, name) {
+  try {
+    let socTemp = fs.readFileSync(`/sys/class/thermal/thermal_zone${id}/temp`, 'utf8');
+    socTemp = parseInt(socTemp) / 1000.0;
+    socTemp = `${socTemp.toFixed(1)} °C`;
+    sensors[name] = socTemp;
+  } catch (err) {};
+}
+
 function updateSensorsJetson() {
   try {
     let socVoltage = fs.readFileSync('/sys/bus/i2c/drivers/ina3221x/6-0040/iio:device0/in_voltage0_input', 'utf8');
@@ -1687,18 +1697,33 @@ function updateSensorsJetson() {
     sensors['SoC current'] = socCurrent;
   } catch(err) {};
 
-  try {
-    let socTemp = fs.readFileSync('/sys/class/thermal/thermal_zone0/temp', 'utf8');
-    socTemp = parseInt(socTemp) / 1000.0;
-    socTemp = `${socTemp.toFixed(1)} °C`;
-    sensors['SoC temperature'] = socTemp;
-  } catch (err) {};
+  updateSensorThermal(0, 'SoC temperature');
+}
 
+function updateSensorsRk3588() {
+  updateSensorThermal(0, 'SoC temperature');
+}
+
+function updateSensors() {
+  sensorsFunc();
   broadcastMsg('sensors', sensors, getms() - ACTIVE_TO);
 }
-if (setup.hw == 'jetson') {
-  updateSensorsJetson();
-  setInterval(updateSensorsJetson, 1000);
+
+let sensorsFunc;
+switch (setup.hw) {
+  case 'jetson':
+    sensorsFunc = updateSensorsJetson;
+    break;
+  case 'rk3588':
+    sensorsFunc = updateSensorsRk3588;
+    break;
+  default:
+    console.log(`Unknown sensors for ${setup.hw}`);
+}
+
+if (sensorsFunc) {
+  updateSensors();
+  setInterval(updateSensors, 1000);
 }
 
 async function isServiceEnabled(service) {
