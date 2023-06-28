@@ -268,7 +268,7 @@ function readDirAbsPath(dir) {
 async function getPipelines() {
   const ps = {};
   Object.assign(ps, readDirAbsPath(belacoderPipelinesDir + '/custom/'));
-  if (setup['hw'] == 'jetson') {
+  if (setup.hw == 'jetson') {
     Object.assign(ps, readDirAbsPath(belacoderPipelinesDir + '/jetson/'));
   }
   Object.assign(ps, readDirAbsPath(belacoderPipelinesDir + '/generic/'));
@@ -1696,7 +1696,7 @@ function updateSensorsJetson() {
 
   broadcastMsg('sensors', sensors, getms() - ACTIVE_TO);
 }
-if (setup['hw'] == 'jetson') {
+if (setup.hw == 'jetson') {
   updateSensorsJetson();
   setInterval(updateSensorsJetson, 1000);
 }
@@ -2528,7 +2528,7 @@ async function getSoftwareUpdateSize() {
   if (res.upgradeCount == 0) {
     aptHeldBackPackages = parseAptPackageList(upgrade.stdout, "The following packages have been kept back:\n");
     if (aptHeldBackPackages) {
-      if (setup['hw'] == 'jetson' && aptHeldBackPackages === 'belabox') {
+      if (setup.hw == 'jetson' && aptHeldBackPackages === 'belabox') {
         // This is a special case for upgrading from an old installation using the stock jetson kernel
         aptHeldBackPackages = 'belabox belabox-linux-tegra';
       }
