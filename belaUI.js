@@ -1823,7 +1823,7 @@ const audioCodecs = {'opus': 'Opus (better quality)', 'aac': 'AAC (backwards com
 
 const noAudioId = "No audio";
 const defaultAudioId = "Pipeline default";
-const audioSrcAliases = {"C4K": "Cam Link 4K", "usbaudio": "USB audio", "rockchiphdmiin": "HDMI"};
+const audioSrcAliases = {"C4K": "Cam Link 4K", "usbaudio": "USB audio", "rockchiphdmiin": "HDMI", "rockchipes8388": "Analog in"};
 
 let audioDevices = {};
 addAudioCardById(audioDevices, noAudioId);
