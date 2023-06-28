@@ -1823,7 +1823,7 @@ const audioCodecs = {'opus': 'Opus (better quality)', 'aac': 'AAC (backwards com
 
 const noAudioId = "No audio";
 const defaultAudioId = "Pipeline default";
-const audioSrcAliases = {"C4K": "Cam Link 4K", "usbaudio": "USB audio"};
+const audioSrcAliases = {"C4K": "Cam Link 4K", "usbaudio": "USB audio", "rockchiphdmiin": "HDMI"};
 
 let audioDevices = {};
 addAudioCardById(audioDevices, noAudioId);
@@ -1877,7 +1877,7 @@ function addAudioCardById(list, id) {
 
 async function updateAudioDevices() {
   // Ignore the onboard audio cards
-  const exclude = ['tegrahda', 'tegrasndt210ref'];
+  const exclude = ['tegrahda', 'tegrasndt210ref', 'rockchipdp0', 'rockchiphdmi0', 'rockchiphdmi1'];
   // Devices to show at the top of the list
   const priority = ['C4K', 'HDMI', 'usbaudio'];
 
