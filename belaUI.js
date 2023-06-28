@@ -1815,7 +1815,7 @@ checkCamlinkUsb2();
 
 
 /* Audio input selection and codec */
-const alsaSrcPattern = /alsasrc device=[A-Za-z0-9:]+/;
+const alsaSrcPattern = /alsasrc device=[A-Za-z0-9:=]+/;
 const alsaPipelinePattern = /alsasrc device=[A-Za-z0-9:]+(.|[\s])*?mux\. *\s?/;
 
 const audioCodecPattern = /voaacenc\s+bitrate=(\d+)\s+!\s+aacparse\s+!/;
