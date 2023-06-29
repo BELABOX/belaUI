@@ -919,6 +919,30 @@ function nmConnGetFields(uuid, fields) {
   }
 }
 
+function nmConnSetWifiMac(uuid, mac, callback) {
+  const args = [
+    "con",
+    "modify",
+    uuid,
+    "connection.interface-name",
+    "",
+    "802-11-wireless.mac-address",
+    mac
+  ];
+
+  execFile("nmcli", args, function(error, stdout, stderr) {
+    let success = true;
+    if (error || stdout != "") {
+      console.log(`nmConnSetWifiMac err: ${stdout} ${stderr}`);
+      success = false;
+    }
+
+    if (callback) {
+      callback(success);
+    }
+  });
+}
+
 function nmConnDelete(uuid, callback) {
   execFile("nmcli", ["conn", "del", uuid], function (error, stdout, stderr) {
     let success = true;
@@ -1323,9 +1347,11 @@ function wifiDeleteFailedConns() {
 
 function wifiNew(conn, msg) {
   if (!msg.device || !msg.ssid) return;
-  if (!wifiIdToHwAddr[msg.device]) return;
 
-  const device = wifiIfs[wifiIdToHwAddr[msg.device]].ifname;
+  const mac = wifiIdToHwAddr[msg.device];
+  if (!mac) return;
+
+  const device = wifiIfs[mac].ifname;
 
   const args = [
     "-w",
@@ -1353,11 +1379,23 @@ function wifiNew(conn, msg) {
       } else {
         conn.send(buildMsg('wifi', {new: {error: "generic", device: msg.device}}, senderId));
       }
-    } else if (stdout.match('successfully activated')) {
-      wifiUpdateSavedConns();
-      wifiUpdateScanResult();
+    } else {
+      const success = stdout.match(/successfully activated with '(.+)'/);
+      if (success) {
+        const uuid = success[1];
+        nmConnSetWifiMac(uuid, mac, function(success) {
+          if (!success) {
+            console.log("Failed to set the MAC address for the newly created connection");
+          }
 
-      conn.send(buildMsg('wifi', {new: {success: true, device: msg.device}}, senderId));
+          wifiUpdateSavedConns();
+          wifiUpdateScanResult();
+
+          conn.send(buildMsg('wifi', {new: {success: true, device: msg.device}}, senderId));
+        });
+      } else {
+        console.log(`wifiNew: no error but not matching a successful connection msg in:\n${stdout}\n${stderr}`);
+      }
     }
   });
 }
