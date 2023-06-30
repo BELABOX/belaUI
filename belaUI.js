@@ -2535,7 +2535,7 @@ const belaboxPackageList = [
 // Reboot instead of just restarting belaUI if we've updated packages matching this list
 const rebootPackageList = [
   'l4t',
-  'belabox-linux-tegra',
+  'belabox-linux-',
   'belabox-network-config'
 ];
 function packageListIncludes(list, includes) {
