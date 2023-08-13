@@ -1917,7 +1917,7 @@ async function updateAudioDevices() {
   // Ignore the onboard audio cards
   const exclude = ['tegrahda', 'tegrasndt210ref', 'rockchipdp0', 'rockchiphdmi0', 'rockchiphdmi1', 'rockchiphdmiind'];
   // Devices to show at the top of the list
-  const priority = ['C4K', 'HDMI', 'usbaudio'];
+  const priority = ['HDMI', 'rockchiphdmiin', 'rockchipes8388', 'C4K', 'usbaudio'];
 
   const deviceDir = '/sys/class/sound';
   const devices = await readdirP(deviceDir);
