@@ -244,7 +244,7 @@ function broadcastMsgExcept(conn, type, data) {
 
 
 /* Read the list of pipeline files */
-function readDirAbsPath(dir) {
+function readDirAbsPath(dir, excludePattern) {
   const pipelines = {};
 
   try {
@@ -253,6 +253,8 @@ function readDirAbsPath(dir) {
 
     for (const f in files) {
       const name = basename + '/' + files[f];
+      if (excludePattern && name.match(excludePattern)) continue;
+
       const id = crypto.createHash('sha1').update(name).digest('hex');
       const path = dir + files[f];
       pipelines[id] = {name: name, path: path};
@@ -268,7 +270,14 @@ function readDirAbsPath(dir) {
 async function getPipelines() {
   const ps = {};
   Object.assign(ps, readDirAbsPath(belacoderPipelinesDir + '/custom/'));
-  Object.assign(ps, readDirAbsPath(belacoderPipelinesDir + `/${setup.hw}/`));
+
+  // Get the hardware-specific pipelines
+  let excludePipelines;
+  if (setup.hw == 'rk3588' && !fs.existsSync('/dev/hdmirx')) {
+    excludePipelines = 'h265_hdmi';
+  }
+  Object.assign(ps, readDirAbsPath(belacoderPipelinesDir + `/${setup.hw}/`, excludePipelines));
+
   Object.assign(ps, readDirAbsPath(belacoderPipelinesDir + '/generic/'));
 
   for (const p in ps) {
