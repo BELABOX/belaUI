@@ -2424,6 +2424,15 @@ spawnSync("killall", ["srtla_send"], {detached: true});
 
 /* Misc commands */
 function command(conn, cmd) {
+  switch(cmd) {
+    case 'get_log':
+      getLog(conn, 'belaUI');
+      return;
+    case 'get_syslog':
+      getLog(conn);
+      return;
+  }
+
   if (isStreaming || isUpdating()) {
     sendStatus(conn);
     return;
@@ -2445,12 +2454,6 @@ function command(conn, cmd) {
       break;
     case 'reset_ssh_pass':
       resetSshPassword(conn);
-      break;
-    case 'get_log':
-      getLog(conn, 'belaUI');
-      break;
-    case 'get_syslog':
-      getLog(conn);
       break;
   }
 }
