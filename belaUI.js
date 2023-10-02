@@ -2343,10 +2343,10 @@ function stopProcess(process) {
     clearTimeout(process.restartTimer);
   }
   process.removeAllListeners('exit');
+  process.on('exit', function() {
+    removeProc(process);
+  })
   if (process.exitCode === null) {
-    process.on('exit', function() {
-      removeProc(process);
-    })
     process.kill('SIGTERM');
     return false;
   } else {
