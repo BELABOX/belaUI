@@ -2355,7 +2355,7 @@ function stopProcess(process) {
   }
 }
 
-const stopCheckInterval = 10;
+const stopCheckInterval = 50;
 function waitForAllProcessesToTerminate() {
   if (streamingProcesses.length == 0) {
     console.log('stop: all processes terminated');
