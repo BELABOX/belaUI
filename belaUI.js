@@ -2346,7 +2346,7 @@ function stopProcess(process) {
   process.on('exit', function() {
     removeProc(process);
   })
-  if (process.exitCode === null) {
+  if (process.exitCode === null && process.signalCode === null) {
     process.kill('SIGTERM');
     return false;
   } else {
