@@ -112,11 +112,14 @@ try {
 console.log(revisions);
 
 let config;
+let passwordHash;
 let sshPasswordHash;
 try {
   config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
   console.log(config);
+  passwordHash = config.password_hash;
   sshPasswordHash = config.ssh_pass_hash;
+  delete config.password_hash;
   delete config.ssh_pass_hash;
 } catch (err) {
   console.log(`Failed to open the config file: ${err.message}. Creating an empty config`);
@@ -135,8 +138,10 @@ try {
 }
 
 function saveConfig() {
+  config.password_hash = passwordHash;
   config.ssh_pass_hash = sshPasswordHash;
   const c = JSON.stringify(config);
+  delete config.password_hash;
   delete config.ssh_pass_hash;
   fs.writeFileSync(CONFIG_FILE, c);
 }
@@ -158,7 +163,7 @@ const wss = new ws.Server({ server });
 wss.on('connection', function connection(conn) {
   conn.lastActive = getms();
 
-  if (!config.password_hash) {
+  if (!passwordHash) {
     conn.send(buildMsg('status', {set_password: true}));
   }
   notificationSendPersistent(conn, false);
@@ -2924,14 +2929,14 @@ function resetSshPassword(conn) {
 
 /* Authentication */
 function setPassword(conn, password, isRemote) {
-  if (conn.isAuthed || (!isRemote && !config.password_hash)) {
+  if (conn.isAuthed || (!isRemote && !passwordHash)) {
     const minLen = 8;
     if (password.length < minLen) {
       notificationSend(conn, "belaui_pass_length", "error",
                        `Minimum password length: ${minLen} characters`, 10);
       return;
     }
-    config.password_hash = bcrypt.hashSync(password, BCRYPT_ROUNDS);
+    passwordHash = bcrypt.hashSync(password, BCRYPT_ROUNDS);
     delete config.password;
     saveConfig();
   }
@@ -2979,13 +2984,13 @@ function connAuth(conn, sendToken) {
 }
 
 function tryAuth(conn, msg) {
-  if (!config.password_hash) {
+  if (!passwordHash) {
     conn.send(buildMsg('auth', {success: false}));
     return;
   }
 
   if (typeof(msg.password) == 'string') {
-    bcrypt.compare(msg.password, config.password_hash, function(err, match) {
+    bcrypt.compare(msg.password, passwordHash, function(err, match) {
       if (match == true && err == undefined) {
         conn.authToken = genAuthToken(msg.persistent_token);
         connAuth(conn, conn.authToken);
