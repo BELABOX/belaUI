@@ -2345,7 +2345,9 @@ function start(conn, params) {
         msg = 'The input source has stalled. Trying to restart...';
       } else if (err.match('Failed to establish an SRT connection')) {
         if (!notificationExists('srtla')) {
-          msg = 'Failed to connect to the SRT server. Retrying...';
+          let reason = err.match(/Failed to establish an SRT connection: ([\w ]+)\./);
+          reason = (reason && reason[1]) ? ` (${reason[1]})` : '';
+          msg = `Failed to connect to the SRT server${reason}. Retrying...`;
         }
       } else if (err.match(/The SRT connection.+, exiting/)) {
         if (!notificationExists('srtla')) {
