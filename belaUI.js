@@ -1800,23 +1800,48 @@ async function monitorBootconfig() {
   }
 }
 
-if (setup.hw == 'jetson') {
-  /* Monitor the kernel log for undervoltage events */
-  const dmesg = spawn("dmesg", ["-w"]);
+/* Hardware-specific monitoring */
+switch (setup.hw) {
+  case 'jetson': {
+    /* Monitor the kernel log for undervoltage events */
+    const dmesg = spawn("dmesg", ["-w"]);
+    dmesg.stdout.on('data', function(data) {
+      if (data.toString('utf8').match('soctherm: OC ALARM 0x00000001')) {
+        const msg = 'System undervoltage detected. ' +
+                    'You may experience system instability, ' +
+                    'including glitching, freezes and the modems disconnecting';
+        notificationBroadcast('jetson_undervoltage', 'error', msg, 10*60, true, false);
+      }
+    }); // dmesg
 
-  dmesg.stdout.on('data', function(data) {
-    if (data.toString('utf8').match('soctherm: OC ALARM 0x00000001')) {
-      const msg = 'System undervoltage detected. ' +
-                  'You may experience system instability, ' +
-                  'including glitching, freezes and the modems disconnecting';
-      notificationBroadcast('jetson_undervoltage', 'error', msg, 10*60, true, false);
-    }
-  });
+    /* Show an alert while belabox-firstboot-bootconfig is active */
+    monitorBootconfig();
+    break;
+  }
 
-  /* Show an alert while belabox-firstboot-bootconfig is active */
-  monitorBootconfig();
+  case 'rk3588': {
+    const dmesg = spawn("dmesg", ["-w"]);
+    dmesg.stdout.on('data', function(data) {
+      data = data.toString('utf8');
+      if (data.match('hdmirx_wait_lock_and_get_timing signal not lock') ||
+          data.match('hdmirx_delayed_work_audio: audio underflow')) {
+        const msg = 'HDMI signal issues detected. This is usually caused either by EMI or a by a faulty cable. ' +
+                    'Try to move any modems away from the HDMI cable and the encoder. ' +
+                    'If that fails, try out a different HDMI cable or to manually set a lower HDMI resolution/framerate on your camera';
+        notificationBroadcast('hdmi_error', 'error', msg, 8, true, false);
+      }
+      if (data.match('hdmirx-controller: Err, timing is invalid')) {
+        const hdmiNotif = notificationExists('hdmi_error');
+        const msg = 'No HDMI signal detected';
+
+        if (!hdmiNotif || hdmiNotif.msg == msg) {
+          notificationBroadcast('hdmi_error', 'error', msg, 3, true, false);
+        }
+      }
+    });
+    break;
+  }
 }
-
 
 /* Check if there are any Cam Links plugged into a USB2 port */
 async function checkCamlinkUsb2() {
