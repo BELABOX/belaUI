@@ -124,6 +124,16 @@ try {
 } catch (err) {
   console.log(`Failed to open the config file: ${err.message}. Creating an empty config`);
   config = {};
+
+  // Configure the default audio source depending on the platform
+  switch (setup.hw) {
+    case 'jetson':
+      config.asrc = fs.existsSync('/dev/hdmi_capture') ? 'HDMI' : 'C4K';
+      break;
+    case 'rk3588':
+      config.asrc = fs.existsSync('/dev/hdmirx') ? 'HDMI' : 'USB audio';
+      break;
+  }
 }
 
 
