@@ -2138,6 +2138,12 @@ async function asrcRetry(pipelineFile, callback, conn) {
   }
 }
 
+function validatePortNo(port) {
+  const portTmp = parseInt(port);
+  if (portTmp != port || portTmp <= 0 || portTmp > 0xFFFF) return undefined;
+  return portTmp;
+}
+
 async function updateConfig(conn, params, callback) {
   asrcRetryTimer = undefined;
 
@@ -2198,8 +2204,8 @@ async function updateConfig(conn, params, callback) {
   params.srtla_addr = params.srtla_addr.trim();
   if (params.srtla_port == undefined)
     return startError(conn, "SRTLA port not specified");
-  const portTmp = parseInt(params.srtla_port);
-  if (portTmp != params.srtla_port || portTmp <= 0 || portTmp > 0xFFFF)
+  const portTmp = validatePortNo(params.srtla_port);
+  if (!portTmp)
     return startError(conn, `invalid SRTLA port '${params.srtla_port}'`);
   params.srtla_port = portTmp;
 
