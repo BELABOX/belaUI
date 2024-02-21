@@ -27,10 +27,12 @@ const { Resolver} = require('dns');
 const bcrypt = require('bcrypt');
 const process = require('process');
 const util = require('util');
+const assert = require('assert');
 
 const SETUP_FILE = 'setup.json';
 const CONFIG_FILE = 'config.json';
 const AUTH_TOKENS_FILE = 'auth_tokens.json';
+const RELAYS_CACHE_FILE = 'relays_cache.json';
 
 const DNS_CACHE_FILE = 'dns_cache.json';
 /* Minimum age of an updated record to trigger a persistent DNS cache update (in ms)
@@ -1472,8 +1474,9 @@ function handleWifi(conn, msg) {
   9 - support for the get_log command
   10 - support for the get_syslog command
   11 - support for the asrc and acodec settings
+  12 - support for receiving relay accounts and relay servers
 */
-const remoteProtocolVersion = 11;
+const remoteProtocolVersion = 12;
 const remoteEndpointHost = 'remote.belabox.net';
 const remoteEndpointPath = '/ws/remote';
 const remoteTimeout = 5000;
@@ -1497,6 +1500,125 @@ function handleRemote(conn, msg) {
           console.log('remote: invalid key');
         }
         break;
+      case 'relays':
+        handleRemoteRelays(msg[type]);
+        break;
+    }
+  }
+}
+
+let relaysCache;
+try {
+  relaysCache = JSON.parse(fs.readFileSync(RELAYS_CACHE_FILE, 'utf8'));
+} catch(err) {
+  console.log("Failed to load the relays cache, starting with an empty cache");
+}
+
+function buildRelaysMsg() {
+  const msg = {};
+  msg.servers = {};
+  msg.accounts = {};
+
+  if (relaysCache) {
+    for (const s in relaysCache.servers) {
+      msg.servers[s] = {name: relaysCache.servers[s].name};
+      if (relaysCache.servers[s].default) msg.servers[s].default = true;
+    }
+    for (const a in relaysCache.accounts) {
+      msg.accounts[a] = {name: relaysCache.accounts[a].name};
+      if (relaysCache.accounts[a].disabled) {
+        msg.accounts[a].name += ' [disabled]';
+        msg.accounts[a].disabled = true;
+      }
+    }
+  }
+
+  return msg;
+}
+
+async function updateCachedRelays(relays) {
+  try {
+    assert.deepStrictEqual(relays, relaysCache);
+  } catch (err) {
+    console.log('updated the relays cache:');
+    console.log(relays);
+    relaysCache = relays;
+    await writeTextFile(RELAYS_CACHE_FILE, JSON.stringify(relays));
+    return true;
+  }
+}
+
+function validateRemoteRelays(msg) {
+  try {
+    const out = {servers: {}, accounts: {}};
+    for (const r_id in msg.servers) {
+      const r = msg.servers[r_id];
+      if (r.type !== "srtla" || typeof r.name != 'string' || typeof r.addr != 'string') continue;
+      if (r.default && r.default !== true) continue;
+      if (!validatePortNo(r.port)) continue;
+
+      out.servers[r_id] = {type: r.type, name: r.name, addr: r.addr, port: r.port};
+      if (r.default) out.servers[r_id].default = true;
+    }
+
+    for (const a_id in msg.accounts) {
+      const a = msg.accounts[a_id];
+      if (typeof a.name != 'string' || typeof a.ingest_key != 'string') continue;
+
+      out.accounts[a_id] = {name: a.name, ingest_key: a.ingest_key};
+      if (a.disabled) out.accounts[a_id].disabled = true;
+    }
+
+    if (Object.keys(out.servers).length < 1) return;
+
+    return out;
+  } catch(err) {
+    return undefined;
+  }
+}
+
+function convertManualToRemoteRelay() {
+  if (!config.srtla_addr || !config.srtla_port) return;
+
+  let remoteRelayServer;
+  for (const s in relaysCache.servers) {
+    if (relaysCache.servers[s].addr.toLowerCase() === config.srtla_addr.toLowerCase()
+        && relaysCache.servers[s].port == config.srtla_port) {
+      remoteRelayServer = s;
+      break;
+    }
+  }
+  if (!remoteRelayServer) return false;
+
+  config.relay_server = remoteRelayServer;
+  delete config.srtla_addr;
+  delete config.srtla_port;
+
+  let remoteRelayAccount;
+  for (const a in relaysCache.accounts) {
+    if (relaysCache.accounts[a].ingest_key === config.srt_streamid) {
+      remoteRelayAccount = a;
+      break;
+    }
+  }
+
+  if (remoteRelayAccount) {
+    config.relay_account = remoteRelayAccount;
+    delete config.srt_streamid;
+  }
+
+  return true;
+}
+
+function handleRemoteRelays(msg) {
+  msg = validateRemoteRelays(msg);
+  if (!msg) return;
+
+  if (updateCachedRelays(msg)) {
+    broadcastMsg('relays', buildRelaysMsg());
+    if (convertManualToRemoteRelay()) {
+      saveConfig();
+      broadcastMsg('config', config);
     }
   }
 }
@@ -1597,6 +1719,8 @@ setInterval(remoteKeepalive, 1000);
 
 function setRemoteKey(key) {
   config.remote_key = key;
+  delete config.relay_server;
+  delete config.relay_account;
   saveConfig();
 
   if (remoteWs) {
@@ -1604,6 +1728,11 @@ function setRemoteKey(key) {
     remoteWs.terminate();
   }
   remoteConnect();
+
+  // Clear the remote relays when switching to a different remote key
+  if (updateCachedRelays(undefined)) {
+    broadcastMsg('relays', buildRelaysMsg());
+  }
 
   broadcastMsg('config', config);
 }
@@ -2244,6 +2373,10 @@ async function updateConfig(conn, params, callback) {
   config.srtla_addr = params.srtla_addr;
   config.srtla_port = params.srtla_port;
   config.bitrate_overlay = params.bitrate_overlay;
+
+  if (!params.relay_server || !params.relay_account) {
+    convertManualToRemoteRelay();
+  }
 
   saveConfig();
 
@@ -2981,6 +3114,8 @@ function sendStatus(conn) {
 async function sendInitialStatus(conn) {
   conn.send(buildMsg('config', config));
   conn.send(buildMsg('pipelines', await getPipelineList()));
+  if (relaysCache)
+    conn.send(buildMsg('relays', buildRelaysMsg()));
   sendStatus(conn);
   conn.send(buildMsg('netif', netif));
   conn.send(buildMsg('sensors', sensors));
