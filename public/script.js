@@ -498,30 +498,37 @@ function loadConfig(c) {
 
 
 /* Pipelines */
+function genOptionList(options, selected) {
+  const list = [];
+  for (const o of options) {
+    for (const value in o) {
+      const html = '<option></option>'
+      const entry = $($.parseHTML(html));
+      entry.attr('value', value);
+      entry.text(o[value].name);
+      if (selected && value == selected) {
+        entry.attr('selected', true);
+      }
+      list.push(entry);
+    }
+  }
+  return list;
+}
+
 let pipelines = {};
 function updatePipelines(ps) {
   if (ps != null) {
     pipelines = ps;
   }
 
-  const pipelinesSelect = document.getElementById("pipelines");
-  pipelinesSelect.innerText = null;
+  const list = genOptionList([pipelines], config.pipeline);
+  $('#pipelines').html(list);
 
-  for (const id in pipelines) {
-    const option = document.createElement("option");
-    option.value = id;
-    option.innerText = pipelines[id].name;
-    if (config.pipeline && config.pipeline == id) {
-      option.selected = true;
-    }
-
-    pipelinesSelect.append(option);
-  }
-  pipelineSelectHandler(pipelinesSelect);
+  pipelineSelectHandler($('#pipelines').val())
 }
 
 function pipelineSelectHandler(s) {
-  const p = pipelines[s.value];
+  const p = pipelines[s];
   if (!p) return;
 
   if (p.asrc) {
@@ -538,7 +545,7 @@ function pipelineSelectHandler(s) {
 }
 
 $("#pipelines").change(function(ev) {
-  pipelineSelectHandler(ev.target);
+  pipelineSelectHandler(ev.target.value);
 });
 
 /* Bitrate setting updates */
