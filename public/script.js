@@ -483,9 +483,9 @@ function loadConfig(c) {
 
   const srtlaAddr = config.srtla_addr ?? "";
   showHideRelayHint(srtlaAddr);
-  document.getElementById("srtlaAddr").value = srtlaAddr;
-  document.getElementById("srtStreamid").value = config.srt_streamid ?? "";
-  document.getElementById("srtlaPort").value = config.srtla_port ?? "";
+  $('#srtlaAddr').val(srtlaAddr);
+  $('#srtlaPort').val(config.srtla_port ?? "");
+  $('#srtStreamid').val(config.srt_streamid ?? "");
 
   $('#remoteDeviceKey').val(config.remote_key);
   $('#remoteKeyForm button[type=submit]').prop('disabled', true);
