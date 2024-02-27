@@ -480,6 +480,7 @@ function loadConfig(c) {
   initSrtLatencySlider(config.srt_latency ?? 2000);
   updatePipelines(null);
   updateAudioSrcs(null);
+  updateRelays(null);
 
   const srtlaAddr = config.srtla_addr ?? "";
   showHideRelayHint(srtlaAddr);
@@ -508,6 +509,9 @@ function genOptionList(options, selected) {
       entry.text(o[value].name);
       if (selected && value == selected) {
         entry.attr('selected', true);
+      }
+      if (o[value].disabled) {
+        entry.attr('disabled', true);
       }
       list.push(entry);
     }
@@ -547,6 +551,73 @@ function pipelineSelectHandler(s) {
 $("#pipelines").change(function(ev) {
   pipelineSelectHandler(ev.target.value);
 });
+
+/* Remote relays config */
+let isValidRelaySelection = true;
+function updateRelaySettings() {
+  if ($('#relayServer').val() == 'manual') {
+    $('.remote-relay-account').addClass('d-none');
+    $('.manual-relay-addr, .manual-streamid').removeClass('d-none');
+    isValidRelaySelection = true;
+  } else {
+    $('.manual-relay-addr').addClass('d-none');
+    $('.remote-relay-account').removeClass('d-none');
+    if ($('#relayAccount').val() == 'manual') {
+      $('.manual-streamid').removeClass('d-none');
+    } else {
+      $('.manual-streamid').addClass('d-none');
+    }
+    isValidRelaySelection = ($('#relayAccount').val() !== null);
+  }
+
+  if (isValidRelaySelection) {
+    removeNotification('relay_account_unavailable');
+  } else {
+    showNotification({name: 'relay_account_unavailable', type: 'error',
+                      msg: 'Your selected relay server account is no longer available. ' +
+                           'Please select a different one to start the stream.'});
+  }
+  updateButtonEnabledDisabled();
+}
+$('#relayServer, #relayAccount').change(function() {
+  updateRelaySettings();
+});
+
+let relays;
+function updateRelays(r) {
+  if (r && r.servers && r.accounts) {
+    relays = r;
+  }
+
+  const preset = {manual: {name: 'Manual configuration'}};
+
+  let selectedServer = config.relay_server;
+  if (!relays || config.srtla_addr || config.srtla_port) {
+    selectedServer = 'manual';
+  } else if (!config.relay_server || !relays.servers[config.relay_server]) {
+    for (const s in relays.servers) {
+      if (relays.servers[s].default) {
+        selectedServer = s;
+      }
+    }
+  }
+  const serverList = genOptionList([relays ? relays.servers : {}, preset], selectedServer);
+  $('#relayServer').html(serverList);
+
+  let selectedAccount = config.relay_account;
+  if (!relays || config.srt_streamid) {
+    selectedAccount = 'manual';
+  } else if (config.relay_account) {
+    if (!relays.accounts[config.relay_account]) {
+      preset['unavailable'] = {name: 'No longer available', disabled: true};
+      selectedAccount = 'unavailable';
+    }
+  }
+  const accountList = genOptionList([relays ? relays.accounts : {}, preset], selectedAccount);
+  $('#relayAccount').html(accountList);
+
+  updateRelaySettings();
+}
 
 /* Bitrate setting updates */
 function updateBitrate(br) {
@@ -1044,6 +1115,9 @@ function handleMessage(msg) {
       case 'pipelines':
         updatePipelines(msg[type]);
         break;
+      case 'relays':
+        updateRelays(msg[type]);
+        break;
       case 'bitrate':
         updateBitrate(msg[type]);
         break;
@@ -1081,11 +1155,23 @@ function getConfig() {
   }
   config.delay = $("#delaySlider").slider("value");
   config.max_br = maxBr;
-  config.srtla_addr = document.getElementById("srtlaAddr").value;
-  config.srtla_port = document.getElementById("srtlaPort").value;
-  config.srt_streamid = document.getElementById("srtStreamid").value;
   config.srt_latency = $("#srtLatencySlider").slider("value");
   config.bitrate_overlay = $("#bitrateOverlay").prop('checked');
+
+  const relayServer = $('#relayServer').val();
+  if (relayServer !== 'manual') {
+    config.relay_server = relayServer;
+  } else {
+    config.srtla_addr = $("#srtlaAddr").val();
+    config.srtla_port = $("#srtlaPort").val();
+  }
+
+  const relayAccount = $('#relayAccount').val();
+  if (relayServer !== 'manual' && relayAccount !== 'manual') {
+    config.relay_account = relayAccount;
+  } else {
+    config.srt_streamid = $("#srtStreamid").val();
+  }
 
   return config;
 }
@@ -1106,6 +1192,15 @@ async function send_command(cmd) {
 
 
 /* UI */
+let startStopButtonIsEnabled;
+function updateButtonEnabledDisabled(isEnabled) {
+  if (isEnabled !== undefined) {
+    startStopButtonIsEnabled = isEnabled;
+  }
+  const button = $("#startStop");
+  button.attr('disabled', !startStopButtonIsEnabled || !isValidRelaySelection);
+}
+
 function updateButton({ add, remove, text, enabled }) {
   const button = document.getElementById("startStop");
 
@@ -1113,11 +1208,7 @@ function updateButton({ add, remove, text, enabled }) {
   button.classList.remove(remove);
 
   button.innerHTML = text;
-  if (enabled) {
-    button.removeAttribute("disabled");
-  } else {
-    button.setAttribute("disabled", true);
-  }
+  updateButtonEnabledDisabled(enabled);
 }
 
 function updateButtonAndSettingsShow({ add, remove, text, enabled, settingsShow }) {
@@ -1204,10 +1295,10 @@ function initSrtLatencySlider(defaultLatency) {
 /* UI event handlers */
 document.getElementById("startStop").addEventListener("click", () => {
   if (!isStreaming) {
-    updateButton({text: "Starting..."});
+    updateButton({text: "Starting...", enabled: false});
     start();
   } else {
-    updateButton({text: "Stopping..."});
+    updateButton({text: "Stopping...", enabled: false});
     stop();
   }
 });
@@ -1220,6 +1311,7 @@ function updateNetact(isActive) {
     showSoftwareUpdates(false);
   } else {
     $('.btn-netact').attr('disabled', true);
+    updateButtonEnabledDisabled(false);
   }
 }
 
