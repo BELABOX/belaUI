@@ -2323,23 +2323,45 @@ async function updateConfig(conn, params, callback) {
     return startError(conn, `invalid SRT latency '${params.srt_latency}' ms`);
   params.srt_latency = latencyTmp;
 
-  // srt streamid
-  if (params.srt_streamid == undefined)
-    return startError(conn, "SRT streamid not specified");
-
   // srtla addr & port
-  if (params.srtla_addr == undefined)
-    return startError(conn, "SRTLA address not specified");
-  params.srtla_addr = params.srtla_addr.trim();
-  if (params.srtla_port == undefined)
-    return startError(conn, "SRTLA port not specified");
-  const portTmp = validatePortNo(params.srtla_port);
-  if (!portTmp)
-    return startError(conn, `invalid SRTLA port '${params.srtla_port}'`);
-  params.srtla_port = portTmp;
+  let srtlaAddr, srtlaPort;
+  if (relaysCache && params.relay_server) {
+    const relayServer = relaysCache.servers[params.relay_server];
+    if (!relayServer) {
+      return startError(conn, "Invalid relay server specified");
+    }
+    srtlaAddr = relayServer.addr;
+    srtlaPort = relayServer.port;
+  } else {
+    if (params.srtla_addr == undefined)
+      return startError(conn, "SRTLA address not specified");
+    params.srtla_addr = params.srtla_addr.trim();
+    srtlaAddr = params.srtla_addr;
+
+    if (params.srtla_port == undefined)
+      return startError(conn, "SRTLA port not specified");
+    params.srtla_port = validatePortNo(params.srtla_port);
+    if (!params.srtla_port)
+      return startError(conn, `invalid SRTLA port '${params.srtla_port}'`);
+    srtlaPort = params.srtla_port;
+  }
+
+  // srt streamid
+  let streamid;
+  if (relaysCache && params.relay_server && params.relay_account) {
+    const relayAccount = relaysCache.accounts[params.relay_account];
+    if (!relayAccount) {
+      return startError(conn, "Invalid relay account specified!");
+    }
+    streamid = relayAccount.ingest_key;
+  } else {
+    if (params.srt_streamid == undefined)
+      return startError(conn, "SRT streamid not specified");
+    streamid = params.srt_streamid;
+  }
 
   // resolve the srtla hostname
-  let srtlaAddr = await resolveSrtla(params.srtla_addr, conn);
+  srtlaAddr = await resolveSrtla(srtlaAddr, conn);
   if (!srtlaAddr) return;
 
   // audio capture device, if needed for the pipeline
@@ -2369,10 +2391,23 @@ async function updateConfig(conn, params, callback) {
   config.pipeline = params.pipeline;
   config.max_br = params.max_br;
   config.srt_latency = params.srt_latency;
-  config.srt_streamid = params.srt_streamid;
-  config.srtla_addr = params.srtla_addr;
-  config.srtla_port = params.srtla_port;
   config.bitrate_overlay = params.bitrate_overlay;
+  if (params.relay_server) {
+    config.relay_server = params.relay_server;
+    delete config.srtla_addr;
+    delete config.srtla_port;
+  } else {
+    config.srtla_addr = params.srtla_addr;
+    config.srtla_port = params.srtla_port;
+    delete config.relay_server;
+  }
+  if (params.relay_account) {
+    config.relay_account = params.relay_account;
+    delete config.srt_streamid;
+  } else {
+    config.srt_streamid = params.srt_streamid;
+    delete config.relay_account;
+  }
 
   if (!params.relay_server || !params.relay_account) {
     convertManualToRemoteRelay();
@@ -2386,7 +2421,7 @@ async function updateConfig(conn, params, callback) {
     pipelineFile = await pipelineSetAsrc(pipelineFile, audioSrcId, audioCodec);
     if (!pipelineFile) return;
 
-    callback(pipelineFile, srtlaAddr);
+    callback(pipelineFile, srtlaAddr, srtlaPort, streamid);
   } else {
     asrcScheduleRetry(pipelineFile, callback, conn);
     updateStatus(true);
@@ -2453,7 +2488,7 @@ function start(conn, params) {
   }
 
   const senderId = conn.senderId;
-  updateConfig(conn, params, function(pipeline, srtlaAddr) {
+  updateConfig(conn, params, function(pipeline, srtlaAddr, srtlaPort, streamid) {
     if (genSrtlaIpList() < 1) {
       startError(conn, "Failed to start, no available network connections", senderId);
       return;
@@ -2463,7 +2498,7 @@ function start(conn, params) {
     spawnStreamingLoop(srtlaSendExec, [
                          9000,
                          srtlaAddr,
-                         config.srtla_port,
+                         srtlaPort,
                          setup.ips_file
                        ], 100, function(err) {
       let msg;
@@ -2485,9 +2520,9 @@ function start(conn, params) {
                             '-b', setup.bitrate_file,
                             '-l', config.srt_latency,
                           ];
-    if (config.srt_streamid != '') {
+    if (streamid != '') {
       belacoderArgs.push('-s');
-      belacoderArgs.push(config.srt_streamid);
+      belacoderArgs.push(streamid);
     }
     spawnStreamingLoop(belacoderExec, belacoderArgs, 2000, function(err) {
       let msg;
