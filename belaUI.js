@@ -3025,7 +3025,7 @@ function stripPasswords(obj) {
   for (const p in copy) {
     if (p === 'password') {
       copy[p] = '<password not logged>';
-    } else if (copy[p].constructor === Object) {
+    } else if (copy[p] && copy[p].constructor === Object) {
       copy[p] = stripPasswords(copy[p]);
     }
   }
