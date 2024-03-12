@@ -176,6 +176,14 @@
 
         <div id="wifi"></div>
 
+        <div id="logTable" class="card mb-4 d-none">
+          <div id="logs" class="card-body" style="height: 530px; overflow: auto">
+          </div>
+          <button type="button" class="btn btn-block btn-danger btn-netact logStream">
+            Hide current log
+          </button>
+        </div>
+
         <div id="settings">
           <div class="card mb-2">
             <div class="card-header bg-success text-center" type="button"
@@ -364,6 +372,32 @@
                 </button>
                 <div class="mt-3 text-secondary text-center small" id="revisions"></div>
 
+              </div> <!-- .card-body -->
+            </div> <!-- .collapse -->
+          </div> <!-- .card -->
+
+          <div class="card mb-2">
+            <div class="card-header bg-success text-center" type="button" data-toggle="collapse" data-target="#collapseFour">
+              <button class="btn btn-link text-white" type="button" data-toggle="collapse" data-target="#collapseFour"
+                aria-expanded="false" aria-controls="collapseFour">
+                Debug
+              </button>
+            </div> <!-- card-header -->
+
+            <div class="collapse" id="collapseFour">
+              <div class="card-body">
+                <div class="form-check mb-2">
+                  <input class="form-check-input" type="checkbox" value="" id="logHideSensitive" checked>
+                  <label class="form-check-label" for="logHideSensitive">
+                    Hide sensitive data
+                  </label>
+                </div>
+                <button type="button" id="logDownload" class="btn btn-block btn-warning btn-netact">
+                  Download log
+                </button>
+                <button type="button" class="btn btn-block btn-warning btn-netact logStream">
+                  Show current log
+                </button>
               </div> <!-- .card-body -->
             </div> <!-- .collapse -->
           </div> <!-- .card -->
