@@ -1578,36 +1578,48 @@ function validateRemoteRelays(msg) {
 }
 
 function convertManualToRemoteRelay() {
-  if (!relaysCache || !config.srtla_addr || !config.srtla_port) return;
+  if (!relaysCache) return false;
 
-  let remoteRelayServer;
-  for (const s in relaysCache.servers) {
-    if (relaysCache.servers[s].addr.toLowerCase() === config.srtla_addr.toLowerCase()
-        && relaysCache.servers[s].port == config.srtla_port) {
-      remoteRelayServer = s;
-      break;
-    }
-  }
-  if (!remoteRelayServer) return false;
+  let modified = false;
 
-  config.relay_server = remoteRelayServer;
-  delete config.srtla_addr;
-  delete config.srtla_port;
-
-  let remoteRelayAccount;
-  for (const a in relaysCache.accounts) {
-    if (relaysCache.accounts[a].ingest_key === config.srt_streamid) {
-      remoteRelayAccount = a;
-      break;
+  if (!config.relay_server && config.srtla_addr && config.srtla_port) {
+    for (const s in relaysCache.servers) {
+      if (relaysCache.servers[s].addr.toLowerCase() === config.srtla_addr.toLowerCase()
+          && relaysCache.servers[s].port == config.srtla_port) {
+        config.relay_server = s;
+        modified = true;
+        break;
+      }
     }
   }
 
-  if (remoteRelayAccount) {
-    config.relay_account = remoteRelayAccount;
+  // If not using a relay server, don't try to convert the streamid to a relay account
+  if (!config.relay_server) {
+    return false;
+  }
+
+  if (config.srtla_addr || config.srtla_port) {
+    delete config.srtla_addr;
+    delete config.srtla_port;
+    modified = true;
+  }
+
+  if (!config.relay_account && config.srt_streamid) {
+    for (const a in relaysCache.accounts) {
+      if (relaysCache.accounts[a].ingest_key === config.srt_streamid) {
+        config.relay_account = a;
+        modified = true;
+        break;
+      }
+    }
+  }
+
+  if (config.relay_account && config.srt_streamid) {
     delete config.srt_streamid;
+    modified = true;
   }
 
-  return true;
+  return modified;
 }
 
 function handleRemoteRelays(msg) {
