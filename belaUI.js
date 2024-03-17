@@ -1578,7 +1578,7 @@ function validateRemoteRelays(msg) {
 }
 
 function convertManualToRemoteRelay() {
-  if (!config.srtla_addr || !config.srtla_port) return;
+  if (!relaysCache || !config.srtla_addr || !config.srtla_port) return;
 
   let remoteRelayServer;
   for (const s in relaysCache.servers) {
