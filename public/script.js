@@ -605,7 +605,7 @@ function updateRelays(r) {
   $('#relayServer').html(serverList);
 
   let selectedAccount = config.relay_account;
-  if (!relays || config.srt_streamid) {
+  if (!relays || config.srt_streamid !== undefined) {
     selectedAccount = 'manual';
   } else if (config.relay_account) {
     if (!relays.accounts[config.relay_account]) {
