@@ -946,70 +946,56 @@ async function nmConnGetFields(uuid, fields) {
   }
 }
 
-function nmConnSetWifiMac(uuid, mac, callback) {
-  const args = [
-    "con",
-    "modify",
-    uuid,
-    "connection.interface-name",
-    "",
-    "802-11-wireless.mac-address",
-    mac
-  ];
+async function nmConnSetWifiMac(uuid, mac) {
+  try {
+    const result = await execFileP("nmcli", [
+      "con",
+      "modify",
+      uuid,
+      "connection.interface-name",
+      "",
+      "802-11-wireless.mac-address",
+      mac
+    ]);
+    return (result.stdout == "");
 
-  execFile("nmcli", args, function(error, stdout, stderr) {
-    let success = true;
-    if (error || stdout != "") {
-      console.log(`nmConnSetWifiMac err: ${stdout} ${stderr}`);
-      success = false;
-    }
-
-    if (callback) {
-      callback(success);
-    }
-  });
+  } catch ({message}) {
+    console.log(`nmConnSetWifiMac err: ${message}`);
+  }
+  return false;
 }
 
-function nmConnDelete(uuid, callback) {
-  execFile("nmcli", ["conn", "del", uuid], function (error, stdout, stderr) {
-    let success = true;
-    if (error || !stdout.match("successfully deleted")) {
-      console.log(`nmConnDelete err: ${stdout}`);
-      success = false;
-    }
+async function nmConnDelete(uuid) {
+  try {
+    const result = await execFileP("nmcli", ["conn", "del", uuid]);
+    return result.stdout.match("successfully deleted");
 
-    if (callback) {
-      callback(success);
-    }
-  });
+  } catch ({message}) {
+    console.log(`nmConnDelete err: ${message}`);
+  }
+  return false;
 }
 
-function nmConnect(uuid, callback) {
-  execFile("nmcli", ["conn", "up", uuid], function (error, stdout, stderr) {
-    let success = true;
-    if (error || !stdout.match("^Connection successfully activated")) {
-      console.log(`nmConnect err: ${stdout}`);
-      success = false;
-    }
+async function nmConnect(uuid) {
+  try {
+    const result = await execFileP("nmcli", ["conn", "up", uuid]);
+    return result.stdout.match("^Connection successfully activated")
 
-    if (callback) {
-      callback(success);
-    }
-  });
+  } catch ({message}) {
+    console.log(`nmConnect err: ${message}`);
+  }
+  return false;
 }
 
-function nmDisconnect(uuid, callback) {
-  execFile("nmcli", ["conn", "down", uuid], function (error, stdout, stderr) {
-    let success = true;
-    if (error || !stdout.match("successfully deactivated")) {
-      console.log(`nmDisconnect err: ${stdout}`);
-      success = false;
-    }
+async function nmDisconnect(uuid) {
+  try {
+     const result = await execFileP("nmcli", ["conn", "down", uuid]);
+     return result.stdout.match("successfully deactivated");
 
-    if (callback) {
-      callback(success);
-    }
-  });
+  } catch ({message}) {
+    console.log(`nmDisconnect err: ${message}`);
+  }
+  return false;
 }
 
 async function nmDevices(fields) {
@@ -1028,23 +1014,20 @@ async function nmDevices(fields) {
   }
 }
 
-function nmRescan(device, callback) {
-  const args = ["device", "wifi", "rescan"];
-  if (device) {
-    args.push("ifname");
-    args.push(device);
-  }
-  execFile("nmcli", args, function (error, stdout, stderr) {
-    let success = true;
-    if (error || stdout != "") {
-      console.log(`nmRescan err: ${stdout}`);
-      success = false;
+async function nmRescan(device) {
+  try {
+    const args = ["device", "wifi", "rescan"];
+    if (device) {
+      args.push("ifname");
+      args.push(device);
     }
+    const result = await execFileP("nmcli", args);
+    return result.stdout == "";
 
-    if (callback) {
-      callback(success);
-    }
-  });
+  } catch ({message}) {
+    console.log(`nmDevices err: ${message}`);
+  }
+  return false;
 }
 
 async function nmScanResults(fields) {
@@ -1314,13 +1297,13 @@ async function wifiUpdateDevices() {
   return statusChange;
 }
 
-function wifiRescan() {
-  nmRescan(undefined, async function(success) {
-    /* A rescan request will fail if a previous one is in progress,
-       but we still attempt to update the results */
-    await wifiUpdateScanResult();
-    wifiScheduleScanUpdates();
-  });
+async function wifiRescan() {
+  await nmRescan();
+
+  /* A rescan request will fail if a previous one is in progress,
+     but we still attempt to update the results */
+  await wifiUpdateScanResult();
+  wifiScheduleScanUpdates();
 }
 
 /* Searches saved connections in wifiIfs by UUID */
@@ -1339,27 +1322,23 @@ function wifiSearchConnection(uuid) {
   return connFound;
 }
 
-function wifiDisconnect(uuid) {
+async function wifiDisconnect(uuid) {
   if (wifiSearchConnection(uuid) === undefined) return;
 
-  nmDisconnect(uuid, async function(success) {
-    if (success) {
-      await wifiUpdateScanResult();
-      wifiScheduleScanUpdates();
-    }
-  });
+  if (await nmDisconnect(uuid)) {
+    await wifiUpdateScanResult();
+    wifiScheduleScanUpdates();
+  }
 }
 
-function wifiForget(uuid) {
+async function wifiForget(uuid) {
   if (wifiSearchConnection(uuid) === undefined) return;
 
-  nmConnDelete(uuid, async function(success) {
-    if (success) {
-      await wifiUpdateSavedConns();
-      await wifiUpdateScanResult();
-      wifiScheduleScanUpdates();
-    }
-  });
+  if (await nmConnDelete(uuid)) {
+    await wifiUpdateSavedConns();
+    await wifiUpdateScanResult();
+    wifiScheduleScanUpdates();
+  }
 }
 
 async function wifiDeleteFailedConns() {
@@ -1368,7 +1347,7 @@ async function wifiDeleteFailedConns() {
     const [uuid, type, ts] = nmcliParseSep(connections[c]);
     if (type !== "802-11-wireless") continue;
     if (ts == 0) {
-      nmConnDelete(uuid);
+      await nmConnDelete(uuid);
     }
   }
 }
@@ -1411,16 +1390,14 @@ function wifiNew(conn, msg) {
       const success = stdout.match(/successfully activated with '(.+)'/);
       if (success) {
         const uuid = success[1];
-        nmConnSetWifiMac(uuid, mac, async function(success) {
-          if (!success) {
-            console.log("Failed to set the MAC address for the newly created connection");
-          }
+        if (!(await nmConnSetWifiMac(uuid, mac))) {
+          console.log("Failed to set the MAC address for the newly created connection");
+        }
 
-          await wifiUpdateSavedConns();
-          await wifiUpdateScanResult();
+        await wifiUpdateSavedConns();
+        await wifiUpdateScanResult();
 
-          conn.send(buildMsg('wifi', {new: {success: true, device: msg.device}}, senderId));
-        });
+        conn.send(buildMsg('wifi', {new: {success: true, device: msg.device}}, senderId));
       } else {
         console.log(`wifiNew: no error but not matching a successful connection msg in:\n${stdout}\n${stderr}`);
       }
@@ -1428,15 +1405,14 @@ function wifiNew(conn, msg) {
   });
 }
 
-function wifiConnect(conn, uuid) {
+async function wifiConnect(conn, uuid) {
   const deviceId = wifiSearchConnection(uuid);
   if (deviceId === undefined) return;
 
   const senderId = conn.senderId;
-  nmConnect(uuid, async function(success) {
-    await wifiUpdateScanResult();
-    conn.send(buildMsg('wifi', {connect: success, device: deviceId}, senderId));
-  });
+  const success = await nmConnect(uuid);
+  await wifiUpdateScanResult();
+  conn.send(buildMsg('wifi', {connect: success, device: deviceId}, senderId));
 }
 
 function handleWifi(conn, msg) {
