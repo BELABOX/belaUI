@@ -215,6 +215,7 @@ async function writeTextFile(file, contents) {
 }
 
 const execP = util.promisify(exec);
+const execFileP = util.promisify(execFile);
 // Promise-based exec(), but without rejections
 async function execPNR(cmd) {
   try {
@@ -911,25 +912,25 @@ function wifiDeviceListGetInetAddr(ifname) {
 
 
 /* NetworkManager / nmcli helpers */
-function nmConnsGet(fields) {
+async function nmConnsGet(fields) {
   try {
-    const result = execFileSync("nmcli", [
+    const result = await execFileP("nmcli", [
       "--terse",
       "--fields",
       fields,
       "connection",
       "show",
-    ]).toString("utf-8").split("\n");
-    return result;
+    ]);
+    return result.stdout.toString("utf-8").split("\n");
 
   } catch ({message}) {
     console.log(`nmConnsGet err: ${message}`);
   }
 }
 
-function nmConnGetFields(uuid, fields) {
+async function nmConnGetFields(uuid, fields) {
   try {
-    const result = execFileSync("nmcli", [
+    const result = await execFileP("nmcli", [
       "--terse",
       "--escape", "no",
       "--get-values",
@@ -937,8 +938,8 @@ function nmConnGetFields(uuid, fields) {
       "connection",
       "show",
       uuid,
-    ]).toString("utf-8").split("\n");
-    return result;
+    ]);
+    return result.stdout.toString("utf-8").split("\n");
 
   } catch ({message}) {
     console.log(`nmConnGetFields err: ${message}`);
@@ -1011,16 +1012,16 @@ function nmDisconnect(uuid, callback) {
   });
 }
 
-function nmDevices(fields) {
+async function nmDevices(fields) {
   try {
-    const result = execFileSync("nmcli", [
+    const result = await execFileP("nmcli", [
       "--terse",
       "--fields",
       fields,
       "device",
       "status",
-    ]).toString("utf-8").split("\n");
-    return result;
+    ]);
+    return result.stdout.toString("utf-8").split("\n");
 
   } catch ({message}) {
     console.log(`nmDevices err: ${message}`);
@@ -1046,16 +1047,16 @@ function nmRescan(device, callback) {
   });
 }
 
-function nmScanResults(fields) {
+async function nmScanResults(fields) {
   try {
-    const result = execFileSync("nmcli", [
+    const result = await execFileP("nmcli", [
       "--terse",
       "--fields",
       fields,
       "device",
       "wifi",
-    ]).toString("utf-8").split("\n");
-    return result;
+    ]);
+    return result.stdout.toString("utf-8").split("\n");
 
   } catch ({message}) {
     console.log(`nmScanResults err: ${message}`);
@@ -1133,8 +1134,8 @@ function wifiBroadcastState() {
 }
 
 
-function wifiUpdateSavedConns() {
-  let connections = nmConnsGet("uuid,type");
+async function wifiUpdateSavedConns() {
+  let connections = await nmConnsGet("uuid,type");
   if (connections === undefined) return;
 
   for (const i in wifiIfs) {
@@ -1148,7 +1149,7 @@ function wifiUpdateSavedConns() {
       if (type !== "802-11-wireless") continue;
 
       // Get the device the connection is bound to and the ssid
-      const [ssid, macTmp] = nmConnGetFields(uuid, "802-11-wireless.ssid,802-11-wireless.mac-address");
+      const [ssid, macTmp] = await nmConnGetFields(uuid, "802-11-wireless.ssid,802-11-wireless.mac-address");
 
       if (!ssid || !macTmp) continue;
 
@@ -1162,8 +1163,8 @@ function wifiUpdateSavedConns() {
   }
 }
 
-function wifiUpdateScanResult() {
-  const wifiNetworks = nmScanResults("active,ssid,signal,security,freq,device");
+async function wifiUpdateScanResult() {
+  const wifiNetworks = await nmScanResults("active,ssid,signal,security,freq,device");
   if (!wifiNetworks) return;
 
   for (const i in wifiIfs) {
@@ -1207,12 +1208,12 @@ function wifiScheduleScanUpdates() {
 }
 
 let unavailableDeviceRetryExpiry = 0;
-function wifiUpdateDevices() {
+async function wifiUpdateDevices() {
   let newDevices = false;
   let statusChange = false;
   let unavailableDevices = false;
 
-  let networkDevices = nmDevices("device,type,state,con-uuid");
+  let networkDevices = await nmDevices("device,type,state,con-uuid");
   if (!networkDevices) return;
 
   // sorts the results alphabetically by interface name
@@ -1280,11 +1281,12 @@ function wifiUpdateDevices() {
   }
 
   if (newDevices) {
-    wifiUpdateSavedConns();
+    await wifiUpdateSavedConns();
     wifiScheduleScanUpdates();
   }
+
   if (statusChange) {
-    wifiUpdateScanResult();
+    await wifiUpdateScanResult();
     wifiScheduleScanUpdates();
   }
   if (newDevices || statusChange) {
@@ -1313,10 +1315,10 @@ function wifiUpdateDevices() {
 }
 
 function wifiRescan() {
-  nmRescan(undefined, function(success) {
+  nmRescan(undefined, async function(success) {
     /* A rescan request will fail if a previous one is in progress,
        but we still attempt to update the results */
-    wifiUpdateScanResult();
+    await wifiUpdateScanResult();
     wifiScheduleScanUpdates();
   });
 }
@@ -1340,9 +1342,9 @@ function wifiSearchConnection(uuid) {
 function wifiDisconnect(uuid) {
   if (wifiSearchConnection(uuid) === undefined) return;
 
-  nmDisconnect(uuid, function(success) {
+  nmDisconnect(uuid, async function(success) {
     if (success) {
-      wifiUpdateScanResult();
+      await wifiUpdateScanResult();
       wifiScheduleScanUpdates();
     }
   });
@@ -1351,17 +1353,17 @@ function wifiDisconnect(uuid) {
 function wifiForget(uuid) {
   if (wifiSearchConnection(uuid) === undefined) return;
 
-  nmConnDelete(uuid, function(success) {
+  nmConnDelete(uuid, async function(success) {
     if (success) {
-      wifiUpdateSavedConns();
-      wifiUpdateScanResult();
+      await wifiUpdateSavedConns();
+      await wifiUpdateScanResult();
       wifiScheduleScanUpdates();
     }
   });
 }
 
-function wifiDeleteFailedConns() {
-  const connections = nmConnsGet("uuid,type,timestamp");
+async function wifiDeleteFailedConns() {
+  const connections = await nmConnsGet("uuid,type,timestamp");
   for (const c in connections) {
     const [uuid, type, ts] = nmcliParseSep(connections[c]);
     if (type !== "802-11-wireless") continue;
@@ -1396,9 +1398,9 @@ function wifiNew(conn, msg) {
   }
 
   const senderId = conn.senderId;
-  execFile("nmcli", args, function(error, stdout, stderr) {
+  execFile("nmcli", args, async function(error, stdout, stderr) {
     if (error || stdout.match('^Error:')) {
-      wifiDeleteFailedConns();
+      await wifiDeleteFailedConns();
 
       if (stdout.match('Secrets were required, but not provided')) {
         conn.send(buildMsg('wifi', {new: {error: "auth", device: msg.device}}, senderId));
@@ -1409,13 +1411,13 @@ function wifiNew(conn, msg) {
       const success = stdout.match(/successfully activated with '(.+)'/);
       if (success) {
         const uuid = success[1];
-        nmConnSetWifiMac(uuid, mac, function(success) {
+        nmConnSetWifiMac(uuid, mac, async function(success) {
           if (!success) {
             console.log("Failed to set the MAC address for the newly created connection");
           }
 
-          wifiUpdateSavedConns();
-          wifiUpdateScanResult();
+          await wifiUpdateSavedConns();
+          await wifiUpdateScanResult();
 
           conn.send(buildMsg('wifi', {new: {success: true, device: msg.device}}, senderId));
         });
@@ -1431,8 +1433,8 @@ function wifiConnect(conn, uuid) {
   if (deviceId === undefined) return;
 
   const senderId = conn.senderId;
-  nmConnect(uuid, function(success) {
-    wifiUpdateScanResult();
+  nmConnect(uuid, async function(success) {
+    await wifiUpdateScanResult();
     conn.send(buildMsg('wifi', {connect: success, device: deviceId}, senderId));
   });
 }
