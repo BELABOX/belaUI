@@ -1044,6 +1044,9 @@ async function nmScanResults(fields) {
       fields,
       "device",
       "wifi",
+      "list",
+      "--rescan",
+      "no"
     ]);
     return result.stdout.toString("utf-8").split("\n");
 
