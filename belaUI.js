@@ -933,6 +933,7 @@ async function nmConnGetFields(uuid, fields) {
     const result = await execFileP("nmcli", [
       "--terse",
       "--escape", "no",
+      "--show-secrets",
       "--get-values",
       fields,
       "connection",
