@@ -947,23 +947,28 @@ async function nmConnGetFields(uuid, fields) {
   }
 }
 
-async function nmConnSetWifiMac(uuid, mac) {
+async function nmConnSetFields(uuid, fields) {
   try {
-    const result = await execFileP("nmcli", [
+    let args = [
       "con",
       "modify",
       uuid,
-      "connection.interface-name",
-      "",
-      "802-11-wireless.mac-address",
-      mac
-    ]);
+    ];
+    for (const field in fields) {
+      args.push(field);
+      args.push(fields[field]);
+    }
+    const result = await execFileP("nmcli", args);
     return (result.stdout == "");
 
   } catch ({message}) {
-    console.log(`nmConnSetWifiMac err: ${message}`);
+    console.log(`nmConnSetFields err: ${message}`);
   }
   return false;
+}
+
+async function nmConnSetWifiMac(uuid, mac) {
+  return nmConnSetFields(uuid, {'connection.interface-name': '', '802-11-wireless.mac-address': mac});
 }
 
 async function nmConnDelete(uuid) {
