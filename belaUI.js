@@ -982,9 +982,10 @@ async function nmConnDelete(uuid) {
   return false;
 }
 
-async function nmConnect(uuid) {
+async function nmConnect(uuid, timeout = undefined) {
   try {
-    const result = await execFileP("nmcli", ["conn", "up", uuid]);
+    const timeoutArgs = timeout ? ["-w", timeout] : [];
+    const result = await execFileP("nmcli", timeoutArgs.concat(["conn", "up", uuid]));
     return result.stdout.match("^Connection successfully activated")
 
   } catch ({message}) {
