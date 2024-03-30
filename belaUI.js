@@ -1021,6 +1021,24 @@ async function nmDevices(fields) {
   }
 }
 
+async function nmDeviceProp(device, fields) {
+  try {
+    const result = await execFileP("nmcli", [
+      "--terse",
+      "--escape", "no",
+      "--get-values",
+      fields,
+      "device",
+      "show",
+      device
+    ]);
+    return result.stdout.toString("utf-8").split("\n");
+
+  } catch ({message}) {
+    console.log(`nmDeviceProp err: ${message}`);
+  }
+}
+
 async function nmRescan(device) {
   try {
     const args = ["device", "wifi", "rescan"];
