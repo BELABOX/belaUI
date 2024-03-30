@@ -326,21 +326,6 @@ async function getPipelineList() {
 /* Network interface list */
 let netif = {};
 
-function setNetifError(int, err) {
-  if (!int) return;
-
-  int.enabled = false;
-  int.error = err;
-}
-
-function setNetifDup(int) {
-  setNetifError(int, 'duplicate IP addr');
-}
-
-function setNetifHotspot(int) {
-  setNetifError(int, 'WiFi hotspot');
-}
-
 function updateNetif() {
   exec("ifconfig", (error, stdout, stderr) => {
     if (error) {
@@ -386,7 +371,7 @@ function updateNetif() {
         }
 
         const enabled = (netif[name] && netif[name].enabled == false) ? false : true;
-        const error = netif[name] ? netif[name].error : undefined;
+        const error = netif[name] ? netif[name].error : 0;
         newints[name] = {ip: inetAddr, txb: txBytes, tp, enabled, error};
 
         // Detect interfaces that are new or with a different address
@@ -409,9 +394,7 @@ function updateNetif() {
       // Detect duplicate IP adddresses and set error status
       for (const i in newints) {
         const int = newints[i];
-        if (int.error == 'duplicate IP addr') {
-          delete int.error;
-        }
+        clearNetifDup(int);
 
         if (intAddrs[int.ip] === undefined) {
           intAddrs[int.ip] = i;
@@ -456,11 +439,62 @@ function updateNetif() {
       updateSrtlaIps();
     }
 
-    broadcastMsg('netif', netif, getms() - ACTIVE_TO);
+    broadcastMsg('netif', netIfBuildMsg(), getms() - ACTIVE_TO);
   });
 }
 updateNetif();
 setInterval(updateNetif, 1000);
+
+const NETIF_ERR_DUPIPV4 = 0x01;
+const NETIF_ERR_HOTSPOT = 0x02;
+// The order is deliberate, we want *hotspot* to have higher priority
+const netIfErrors = {
+  2: 'WiFi hotspot',
+  1: 'duplicate IPv4 addr'
+}
+
+function setNetifError(int, err) {
+  if (!int) return;
+
+  int.enabled = false;
+  int.error |= err;
+}
+
+function clearNetifError(int, err) {
+  if (!int) return;
+  int.error &= ~err;
+}
+
+function setNetifDup(int) {
+  setNetifError(int, NETIF_ERR_DUPIPV4);
+}
+function clearNetifDup(int) {
+  clearNetifError(int, NETIF_ERR_DUPIPV4);
+}
+
+function setNetifHotspot(int) {
+  setNetifError(int, NETIF_ERR_HOTSPOT);
+}
+
+function netIfGetErrorMsg(i) {
+  if (i.error == 0) return;
+
+  for (const e in netIfErrors) {
+    if (i.error & e) return netIfErrors[e];
+  }
+}
+
+function netIfBuildMsg() {
+  const m = {};
+  for (const i in netif) {
+    m[i] = {ip: netif[i].ip, tp: netif[i].tp, enabled: netif[i].enabled};
+    const error = netIfGetErrorMsg(netif[i]);
+    if (error) {
+      m[i].error = error;
+    }
+  }
+  return m;
+}
 
 function countActiveNetif() {
   let count = 0;
@@ -471,25 +505,32 @@ function countActiveNetif() {
 }
 
 function handleNetif(conn, msg) {
-  const int = netif[msg['name']];
+  const int = netif[msg.name];
   if (!int) return;
 
   if (int.ip != msg.ip) return;
 
-  if (msg['enabled'] === true || msg['enabled'] === false) {
-    if (!msg['enabled'] && int.enabled && countActiveNetif() == 1) {
-      notificationSend(conn, "netif_disable_all", "error", "Can't disable all networks", 10);
-    } else if (msg['enabled'] && int.error) {
-      notificationSend(conn, "netif_enable_error", "error", `Can't enable ${msg['name']}: ${int.error}`, 10);
-    } else {
-      int.enabled = msg['enabled'];
-      if (isStreaming) {
-        updateSrtlaIps();
+  if (msg.enabled === true || msg.enabled === false) {
+    if (msg.enabled) {
+      const err = netIfGetErrorMsg(int);
+      if (err) {
+        notificationSend(conn, "netif_enable_error", "error", `Can't enable ${msg.name}: ${err}`, 10);
+        return;
       }
+    } else {
+      if (int.enabled && countActiveNetif() == 1) {
+        notificationSend(conn, "netif_disable_all", "error", "Can't disable all networks", 10);
+        return;
+      }
+    }
+
+    int.enabled = msg.enabled;
+    if (isStreaming) {
+      updateSrtlaIps();
     }
   }
 
-  conn.send(buildMsg('netif', netif));
+  conn.send(buildMsg('netif', netIfBuildMsg()));
 }
 
 
@@ -783,7 +824,11 @@ async function updateGw() {
   let goodIf;
   for (const addr of addrs) {
     for (const i in netif) {
-      if (netif[i].error) continue;
+      const error = netIfGetErrorMsg(netif[i]);
+      if (error) {
+        console.log(`Not probing internet connectivity via ${i} (${netif[i].ip}): ${error}`);
+        continue;
+      }
 
       console.log(`Probing internet connectivity via ${i} (${netif[i].ip})`);
       if (await checkConnectivity(addr, netif[i].ip)) {
@@ -1490,7 +1535,7 @@ async function wifiUpdateDevices() {
       if (wifiIfIsHotspot(wifiIfs[i])) {
         const n = netif[wifiIfs[i].ifname];
         if (!n) continue;
-        if (n.error) continue;
+        if (n.error & NETIF_ERR_HOTSPOT) continue;
 
         setNetifHotspot(n);
         hotspotCount++;
@@ -3559,7 +3604,7 @@ async function sendInitialStatus(conn) {
   if (relaysCache)
     conn.send(buildMsg('relays', buildRelaysMsg()));
   sendStatus(conn);
-  conn.send(buildMsg('netif', netif));
+  conn.send(buildMsg('netif', netIfBuildMsg()));
   conn.send(buildMsg('sensors', sensors));
   conn.send(buildMsg('revisions', revisions));
   conn.send(buildMsg('acodecs', audioCodecs));
