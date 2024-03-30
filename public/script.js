@@ -841,6 +841,47 @@ function wifiListSavedNetwork(ssid, uuid) {
   return network;
 }
 
+function wifiCheckHotspotSettings(deviceId) {
+  if (!wifiIfs[deviceId] || !wifiIfs[deviceId].hotspot) return;
+
+  const cardId = wifiFindCardId(deviceId);
+  const form = $(`#${cardId}`).find('.hotspot');
+
+  let anyValueChanged = false;
+  let allValuesValid = true;
+
+  const nameInput = form.find('.hotspot-name').val();
+  if (nameInput != wifiIfs[deviceId].hotspot.name) {
+    anyValueChanged = true;
+    const hint = form.find('.hotspot-name-hint');
+    if (nameInput.length < 1 || nameInput.length > 32) {
+      hint.removeClass('d-none');
+      allValuesValid = false;
+    } else {
+      hint.addClass('d-none');
+    }
+  }
+
+  const passwordInput = form.find('.hotspot-password').val();
+  if (passwordInput != wifiIfs[deviceId].hotspot.password) {
+    anyValueChanged = true;
+    const hint = form.find('.hotspot-password-hint');
+    if (passwordInput.length < 8 || passwordInput.length > 64) {
+      hint.removeClass('d-none');
+      allValuesValid = false;
+    } else {
+      hint.addClass('d-none');
+    }
+  }
+
+  const channelInput = form.find('.hotspot-channel');
+  if (channelInput.val() != wifiIfs[deviceId].hotspot.channel) {
+    anyValueChanged = true;
+  }
+
+  form.find('.hotspot-config-save').attr('disabled', !anyValueChanged || !allValuesValid)
+}
+
 let wifiIfs = {};
 function updateWifiState(msg) {
   for (const i in wifiIfs) {
@@ -848,8 +889,6 @@ function updateWifiState(msg) {
   }
 
   for (let deviceId in msg) {
-    deviceId = parseInt(deviceId);
-
     // Mark the interface as not removed
     if (wifiIfs[deviceId]) {
       delete wifiIfs[deviceId].removed;
@@ -864,83 +903,180 @@ function updateWifiState(msg) {
         <div id="${cardId}" class="wifi-settings card mb-2">
           <div class="card-header bg-success text-center" type="button" data-toggle="collapse" data-target="#collapseWifi-${deviceId}">
             <button class="btn btn-link text-white" type="button" data-toggle="collapse" data-target="#collapseWifi-${deviceId}" aria-expanded="false" aria-controls="collapseWifi-${deviceId}">
-              Wifi: <strong class="device-name"></strong>
+              Wifi: <strong class="device-name"></strong><span class="device-hw"></span>
             </button>
           </div>
 
           <div class="collapse" id="collapseWifi-${deviceId}">
             <div class="card-body">
-              <button type="button" class="btn btn-block btn-secondary btn-netact mb-2 wifi-scan-button" onClick="wifiScan(this, ${deviceId})">
-                Scan for WiFi networks
-              </button>
+              <div class="hotspot d-none">
+                <p class="hotspot-modified hotspot-warning d-none text-danger">The NetworkManager connection for the hotspot has been modified from the BELABOX defaults. Correct functionality can't be guaranteed. If you experience issues, please delete it via command line</p>
 
-              <div class="connecting small text-info d-none">
-                <div class="spinner-border spinner-border-sm" role="status">
+                <div class="form-group">
+                  <label>Network name</label>
+                  <p class="hotspot-name-hint text-danger d-none">The network name must be between 1 and 32 characters long</p>
+                  <input type="text" class="form-control hotspot-name recheck-netact">
                 </div>
-                Connecting...
-              </div>
 
-              <div class="connect-error small text-info d-none">
-                Error connecting to the network. Has the password changed?
-              </div>
-
-              <div class="scanning small text-info d-none">
-                <div class="spinner-border spinner-border-sm" role="status">
+                <div class="form-group">
+                  <label>Password</label>
+                  <p class="hotspot-password-hint text-danger d-none">The password must be between 8 and 64 characters long</p>
+                  <div class="input-group">
+                    <input type="password" class="form-control hotspot-password netact">
+                    <div class="input-group-append">
+                      <button class="btn btn-outline-secondary showHidePassword" type="button">Show</button>
+                    </div>
+                  </div>
                 </div>
-                Scanning...
-              </div>
 
-              <table class="table mb-2 table-hover table-sm small">
-                <tbody class="networks available-networks"></tbody>
-              </table>
+                <div class="form-group">
+                  <label>Wifi channel</label>
+                  <select class="form-control hotspot-channel netact">
+                  </select>
+                </div>
 
-              <table class="d-none table mt-4 table-hover table-sm small saved-networks">
-                <thead>
-                  <th colspan=2>Other saved networks</th>
-                </thead>
-                <tbody class="networks saved-networks"></tbody>
-              </table>
+                <div class="text-danger form-group save-error small d-none"></div>
+                <div class="text-info form-group saving small d-none"><div class="spinner-border spinner-border-sm"></div> Saving...</div>
+                <div class="text-success form-group saved small d-none">Saved</div>
+
+                <button class="btn btn-block btn-primary mb-2 hotspot-config-save netact" disabled>Save</button>
+                <button class="btn btn-block btn-warning mb-2 client-mode netact">Turn hotspot off</button>
+              </div> <!-- .hotspot -->
+
+              <div class="client d-none">
+                <button type="button" class="btn btn-block btn-secondary btn-netact mb-2 wifi-scan-button" onClick="wifiScan(this, ${deviceId})">
+                  Scan for WiFi networks
+                </button>
+
+                <div class="connecting small text-info d-none">
+                  <div class="spinner-border spinner-border-sm" role="status">
+                  </div>
+                  Connecting...
+                </div>
+
+                <div class="connect-error small text-info d-none">
+                  Error connecting to the network. Has the password changed?
+                </div>
+
+                <div class="scanning small text-info d-none">
+                  <div class="spinner-border spinner-border-sm" role="status">
+                  </div>
+                  Scanning...
+                </div>
+
+                <table class="table mb-2 table-hover table-sm small">
+                  <tbody class="networks available-networks"></tbody>
+                </table>
+
+                <table class="d-none table mt-4 table-hover table-sm small saved-networks">
+                  <thead>
+                    <th colspan=2>Other saved networks</th>
+                  </thead>
+                  <tbody class="networks saved-networks"></tbody>
+                </table>
+
+                <button class="btn btn-block btn-warning mb-2 hotspot-mode netact" disabled>Hotspot mode</button>
+              </div> <!-- .client -->
             </div>
           </div>
         </div>`;
 
       deviceCard = $($.parseHTML(html));
 
+      deviceCard.find('button.showHidePassword').click(showHidePassword);
+
+      deviceCard.find('button.hotspot-mode').click(function() {
+        if (confirm('This will immediately disconnect the WiFi adapter from any connected networks and turn on the hotspot. Proceed?')) {
+          ws.send(JSON.stringify({wifi: {hotspot: {start: {device: deviceId}}}}));
+        }
+      });
+
+      deviceCard.find('button.client-mode').click(function() {
+        if (confirm('This will immediately disconnect any connected clients and disable the hotspot. Proceed?')) {
+          ws.send(JSON.stringify({wifi: {hotspot: {stop: {device: deviceId}}}}));
+        }
+      });
+
+      deviceCard.find('.hotspot-name, .hotspot-password, .hotspot-channel').on('input', function() {wifiCheckHotspotSettings(deviceId)});
+
+      deviceCard.find('button.hotspot-config-save').click(function() {
+        let config = {
+          device: deviceId,
+          name: deviceCard.find('input.hotspot-name').val(),
+          password: deviceCard.find('input.hotspot-password').val(),
+          channel: deviceCard.find('select.hotspot-channel').val(),
+        };
+        ws.send(JSON.stringify({wifi: {hotspot: {config}}}));
+
+        $(this).attr('disabled', true);
+        deviceCard.find('.save-error, .saved').addClass('d-none');
+        deviceCard.find('.saving').removeClass('d-none');
+      });
+
       deviceCard.appendTo('#wifi');
     }
 
     // Update the card's header
     deviceCard.find('.device-name').text(device.ifname);
+    deviceCard.find('.device-hw').text(device.hw ? ` (${device.hw})` : '');
 
-    // Show the available networks
-    let networkList = [];
+    // Disable or enable the hotspot mode button depending on whether the hardware supports it
+    deviceCard.find('button.hotspot-mode').attr('disabled', (!device.supports_hotspot && !device.hotspot));
 
-    for (const a of msg[deviceId].available) {
-      if (a.active) {
-        networkList.push(wifiListAvailableNetwork(device, deviceId, a));
+    if (device.hotspot) {
+      if (!wifiIfs[deviceId] || !wifiIfs[deviceId].hotspot || wifiIfs[deviceId].hotspot.name != device.hotspot.name) {
+        deviceCard.find('.hotspot-name').val(device.hotspot.name);
       }
-    }
-
-    for (const a of msg[deviceId].available) {
-      if (!a.active) {
-        networkList.push(wifiListAvailableNetwork(device, deviceId, a));
+      if (!wifiIfs[deviceId] || !wifiIfs[deviceId].hotspot || wifiIfs[deviceId].hotspot.password != device.hotspot.password) {
+        deviceCard.find('.hotspot-password').val(device.hotspot.password);
       }
-    }
+      if (!wifiIfs[deviceId] || !wifiIfs[deviceId].hotspot || wifiIfs[deviceId].hotspot.channel != device.hotspot.channel) {
+        const channels = genOptionList([device.hotspot.available_channels], device.hotspot.channel);
+        deviceCard.find('select.hotspot-channel').html(channels);
+      }
 
-    deviceCard.find('.available-networks').html(networkList);
+      if (device.hotspot.warnings && device.hotspot.warnings.includes('modified')) {
+        deviceCard.find('.hotspot-modified').removeClass('d-none');
+      } else {
+        deviceCard.find('.hotspot-modified').addClass('d-none');
+      }
 
-    // Show the saved networks
-    networkList = [];
-    for (const ssid in msg[deviceId].saved) {
-      const uuid = msg[deviceId].saved[ssid];
-      networkList.push(wifiListSavedNetwork(ssid, uuid));
-    }
-
-    if (networkList.length) {
-      deviceCard.find('tbody.saved-networks').html(networkList);
-      deviceCard.find('table.saved-networks').removeClass('d-none');
+      deviceCard.find('.client').addClass('d-none');
+      deviceCard.find('.hotspot').removeClass('d-none');
     } else {
-      deviceCard.find('table.saved-networks').addClass('d-none');
+      // Show the available networks
+      let networkList = [];
+
+      for (const a of msg[deviceId].available) {
+        if (a.active) {
+          networkList.push(wifiListAvailableNetwork(device, deviceId, a));
+        }
+      }
+
+      for (const a of msg[deviceId].available) {
+        if (!a.active) {
+          networkList.push(wifiListAvailableNetwork(device, deviceId, a));
+        }
+      }
+
+      deviceCard.find('.available-networks').html(networkList);
+
+      // Show the saved networks
+      networkList = [];
+      for (const ssid in msg[deviceId].saved) {
+        const uuid = msg[deviceId].saved[ssid];
+        networkList.push(wifiListSavedNetwork(ssid, uuid));
+      }
+
+      if (networkList.length) {
+        deviceCard.find('tbody.saved-networks').html(networkList);
+        deviceCard.find('table.saved-networks').removeClass('d-none');
+      } else {
+        deviceCard.find('table.saved-networks').addClass('d-none');
+      }
+
+      deviceCard.find('.hotspot').addClass('d-none');
+      deviceCard.find('.client').removeClass('d-none');
     }
   }
 
@@ -978,6 +1114,36 @@ function handleWifiResult(msg) {
     }
     if (msg.new.success) {
       $('#wifiModal').modal('hide');
+    }
+  } else if (msg.hotspot) {
+    if (msg.hotspot.config) {
+      const wifiManager = $(`#${wifiFindCardId(msg.hotspot.config.device)}`);
+
+      if (msg.hotspot.config.success) {
+        wifiManager.find('.save-error, .saving').addClass('d-none');
+        wifiManager.find('.saved').removeClass('d-none');
+
+      } else if (msg.hotspot.config.error) {
+        let errMsg;
+
+        switch (msg.hotspot.config.error) {
+          case 'name':
+          case 'password':
+          case 'channel':
+            errMsg = `invalid ${msg.hotspot.config.error}`;
+            break;
+          case 'saving':
+          case 'activating':
+            errMsg = 'couldn\'t apply the new settings';
+            break;
+        }
+        if (errMsg) {
+          const errorField = wifiManager.find('.save-error');
+          errorField.text('Failed to save the settings: ' + errMsg);
+          wifiManager.find('.saved, .saving').addClass('d-none');
+          errorField.removeClass('d-none');
+        }
+      }
     }
   }
 }
@@ -1417,7 +1583,7 @@ $('.command-btn').click(function() {
   }
 });
 
-$('button.showHidePassword').click(function() {
+function showHidePassword() {
   const inputField = $(this).parents('.input-group').find('input');
   if(inputField.attr('type') == 'password') {
     inputField.attr('type', 'text');
@@ -1426,7 +1592,8 @@ $('button.showHidePassword').click(function() {
     inputField.attr('type', 'password');
     $(this).text('Show');
   }
-});
+}
+$('button.showHidePassword').click(showHidePassword);
 
 function showHideRelayHint(addr) {
   const isCloudRelay = addr.match(/belabox.net$/);
