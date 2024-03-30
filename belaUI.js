@@ -1074,6 +1074,24 @@ async function nmScanResults(fields) {
   }
 }
 
+async function nmHotspot(device, ssid, password) {
+  try {
+    const result = await execFileP("nmcli", [
+      "-w", "15",
+      "device", "wifi",
+      "hotspot",
+      "ssid", ssid,
+      "password", password,
+      "ifname", device
+    ]);
+
+    const uuid = result.stdout.match(/successfully activated with '(.+)'/);
+    return uuid[1];
+  } catch ({message}) {
+    console.log(`nmHotspot err: ${message}`);
+  }
+}
+
 // parses : separated values, with automatic \ escape detection and stripping
 function nmcliParseSep(value) {
   return value.split(/(?<!\\):/).map(a => a.replace(/\\:/g, ':'));
