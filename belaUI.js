@@ -1118,8 +1118,17 @@ function nmcliParseSep(value) {
     'id', // numeric id for the adapter - temporary for each belaUI execution
     'ifname': 'wlanX',
     'conn': 'uuid' or undefined; // the active connection
+    'hw': 'hardware name',       // the name of the wifi adapter hardware
     'available': Map{<an>},
-    'saved': {<sn>}
+    'saved': {<sn>},
+    'hotspot': {
+      'conn': 'uuid',
+      'name': 'ssid',
+      'password': 'password',
+      'availableChannels': ['auto', 'auto_24', 'auto_50'],
+      'channel': ^see above,
+      'warnings': {} / {modified: true},
+    }
   }
 
   Available network <an>:
@@ -1150,9 +1159,26 @@ function wifiBuildMsg() {
     ifs[id] = {
       ifname: s.ifname,
       conn: s.conn,
-      available: Array.from(s.available.values()),
-      saved: s.saved
+      hw: s.hw
     };
+
+    if (wifiIfIsHotspot(s)) {
+      ifs[id].hotspot = {};
+      ifs[id].hotspot.name = s.hotspot.name;
+      ifs[id].hotspot.password = s.hotspot.password;
+      ifs[id].hotspot.available_channels = getWifiChannelMap(s.hotspot.availableChannels);
+      ifs[id].hotspot.channel = s.hotspot.channel;
+      const warnings = Object.keys(s.hotspot.warnings);
+      if (warnings.length > 0) {
+        ifs[id].hotspot.warnings = warnings;
+      }
+    } else {
+      ifs[id].available = Array.from(s.available.values());
+      ifs[id].saved = s.saved;
+      if (s.hotspot) {
+        ifs[id].supports_hotspot = true;
+      }
+    }
   }
 
   return ifs;
@@ -1162,6 +1188,110 @@ function wifiBroadcastState() {
   broadcastMsg('status', {wifi: wifiBuildMsg()});
 }
 
+const wifiChannels = {
+  auto:    {name: 'Auto (any band)', nmBand: '',   nmChannel: ''},
+  auto_24: {name: 'Auto (2.4 GHz)',  nmBand: 'bg', nmChannel: ''},
+  auto_50: {name: 'Auto (5.0 GHz)',  nmBand: 'a',  nmChannel: ''}
+};
+
+function getWifiChannelMap(list) {
+  const map = {};
+  for (const e of list) {
+    if (wifiChannels[e]) {
+      map[e] = {name: wifiChannels[e].name};
+    } else {
+      console.log(`Unknown WiFi channel ${e}`);
+    }
+  }
+
+  return map;
+}
+
+function channelFromNM(band, channel) {
+  for (const i in wifiChannels) {
+    if (band == wifiChannels[i].nmBand &&
+        (channel == wifiChannels[i].nmChannel || (channel == 0 && wifiChannels[i].nmChannel == ''))) {
+      return i;
+    }
+  }
+
+  console.log(`channelFromNM(): WARNING unknown NM channel (band: ${band}, channel: ${channel}`);
+  return 'auto';
+}
+
+async function handleHotspotConn(macAddr, uuid) {
+  if (!macAddr) {
+    // Check if the connection is in use for any wifi interface
+    const connIfName = await nmConnGetFields(uuid, 'connection.interface-name');
+
+    for (const m in wifiIfs) {
+      const w = wifiIfs[m];
+
+      if (w.hotspot && (w.hotspot.conn == uuid || w.ifname == connIfName)) {
+        // If we can match the connection against a certain interface
+        if (!w.hotspot.conn) {
+          // And if this interface doesn't already have a hotspot connection
+          // Try to update the connection to match the MAC address
+          if (await nmConnSetWifiMac(uuid, m)) {
+            w.hotspot.conn = uuid;
+            macAddr = m;
+          }
+        } else {
+          // If the interface already has a hotspot connection, then disable autoconnect
+          await nmConnSetFields(uuid, {'connection.autoconnect': 'no'});
+        }
+        break;
+      } // if (w.hotspot && ...)
+    } // for m in wifiIfs
+  } // !macAddr
+
+  if (!macAddr || !wifiIfs[macAddr] || !wifiIfs[macAddr].hotspot || (wifiIfs[macAddr].hotspot.conn && wifiIfs[macAddr].hotspot.conn != uuid)) {
+    return;
+  }
+
+  /*
+    we expect and will update automatically:
+    connection.autoconnect-priority: 999
+
+    we expect these settings, otherwise will mark as modified connections:
+    802-11-wireless.hidden=no
+    802-11-wireless-security.key-mgmt=wpa-psk
+    802-11-wireless-security.pairwise=ccmp
+    802-11-wireless-security.group=ccmp
+    802-11-wireless-security.proto=rsn
+    802-11-wireless-security.pmf=1 (disable) - disables requiring WPA3 Protected Management Frames for compatibility
+  */
+  const settingsFields = "connection.autoconnect-priority," +
+                         "802-11-wireless.ssid," +
+                         "802-11-wireless-security.psk," +
+                         "802-11-wireless.band," +
+                         "802-11-wireless.channel";
+  const checkFields = "802-11-wireless.hidden," +
+                      "802-11-wireless-security.key-mgmt," +
+                      "802-11-wireless-security.pairwise," +
+                      "802-11-wireless-security.group," +
+                      "802-11-wireless-security.proto," +
+                      "802-11-wireless-security.pmf";
+
+  const fields = await nmConnGetFields(uuid, `${settingsFields},${checkFields}`);
+
+  /* If the connection doesn't have maximum priority, update it
+     This is required to ensure the hotspot is started even if the Wifi
+     networks for some matching client connections are available
+  */
+  if (fields[0] != '999') {
+    await nmConnSetFields(uuid, {'connection.autoconnect-priority': 999});
+  }
+
+  wifiIfs[macAddr].hotspot.conn = uuid;
+  wifiIfs[macAddr].hotspot.name = fields[1];
+  wifiIfs[macAddr].hotspot.password = fields[2];
+  wifiIfs[macAddr].hotspot.channel = channelFromNM(fields[3], fields[4]);
+
+  if (fields[5] != "no" || fields[6] != "wpa-psk" || fields[7] != "ccmp" || fields[8] != "ccmp" || fields[9] != "rsn" || fields[10] != "1") {
+    wifiIfs[macAddr].hotspot.warnings.modified = true;
+  }
+}
 
 async function wifiUpdateSavedConns() {
   let connections = await nmConnsGet("uuid,type");
@@ -1178,13 +1308,17 @@ async function wifiUpdateSavedConns() {
       if (type !== "802-11-wireless") continue;
 
       // Get the device the connection is bound to and the ssid
-      const [ssid, macTmp] = await nmConnGetFields(uuid, "802-11-wireless.ssid,802-11-wireless.mac-address");
+      const [mode, ssid, macTmp] = await nmConnGetFields(uuid, "802-11-wireless.mode,802-11-wireless.ssid,802-11-wireless.mac-address");
 
-      if (!ssid || !macTmp) continue;
+      if (!ssid) continue;
 
       const macAddr = macTmp.toLowerCase();
-      if (wifiIfs[macAddr]) {
-        wifiIfs[macAddr].saved[ssid] = uuid;
+      if (mode == 'ap') {
+        handleHotspotConn(macAddr, uuid);
+      } else if (mode == 'infrastructure') {
+        if (macAddr && wifiIfs[macAddr]) {
+          wifiIfs[macAddr].saved[ssid] = uuid;
+        }
       }
     } catch (err) {
       console.log(`Error getting the nmcli connection information: ${err.message}`);
@@ -1285,13 +1419,32 @@ async function wifiUpdateDevices() {
       } else {
         const id = wifiIfId++;
 
+        const prop = await nmDeviceProp(ifname, "GENERAL.VENDOR,GENERAL.PRODUCT,WIFI-PROPERTIES.AP,WIFI-PROPERTIES.5GHZ,WIFI-PROPERTIES.2GHZ");
+        const vendor = prop[0].replace('Corporation', '').trim();
+        const pb = prop[1].match(/[\[\(](.+)[\]\)]/);
+        const product = pb ? pb[1] : prop[1];
+
         wifiIfs[hwAddr] = {
           id,
           ifname,
+          hw: vendor + ' ' + product,
           conn,
           available: new Map(),
           saved: {}
         };
+        if (prop[2] === 'yes') {
+          wifiIfs[hwAddr].hotspot = {};
+          wifiIfs[hwAddr].hotspot.forceHotspotStatus = 0;
+          wifiIfs[hwAddr].hotspot.warnings = {};
+
+          wifiIfs[hwAddr].hotspot.availableChannels = ['auto'];
+          if (prop[3] === 'yes') {
+            wifiIfs[hwAddr].hotspot.availableChannels.push('auto_50');
+          }
+          if (prop[4] === 'yes') {
+            wifiIfs[hwAddr].hotspot.availableChannels.push('auto_24');
+          }
+        }
         newDevices = true;
         statusChange = true;
       }
@@ -1461,6 +1614,188 @@ async function wifiConnect(conn, uuid) {
   conn.send(buildMsg('wifi', {connect: success, device: deviceId}, senderId));
 }
 
+function wifiForceHotspot(wifi, ms) {
+  if (!wifi.hotspot) return;
+
+  if (ms <= 0) {
+    wifi.hotspot.forceHotspotStatus = 0;
+    return;
+  }
+
+  const until = getms() + ms;
+  if (until > wifi.hotspot.forceHotspotStatus) {
+    wifi.hotspot.forceHotspotStatus = until;
+  }
+}
+
+async function wifiHotspotStart(msg) {
+  if (!msg.device) return;
+
+  const mac = wifiIdToHwAddr[msg.device];
+  if (!mac) return;
+
+  const i = wifiIfs[mac];
+  if (!i) return;
+  if (!i.hotspot) return; // hotspot not supported, nothing to do
+
+  if (i.hotspot.conn) {
+    if (i.hotspot.conn != i.conn) {
+      /* We assume that the operation will succeed, to be able to show an immediate response in the UI
+         But especially if we're already connected to a network in client mode, it can take a few
+         seconds before NM will show us as 'connected' to our hotspot connection.
+         We use wifiForceHotspot() to ensure the device is reported in hotspot mode for this duration
+      */
+      wifiForceHotspot(i, 7000);
+      wifiBroadcastState();
+
+      if (await nmConnect(i.hotspot.conn, 5)) {
+        await nmConnSetFields(i.hotspot.conn, {'connection.autoconnect': 'yes',
+                                               'connection.autoconnect-priority': 999});
+      } else {
+        // Remove the wifiForceHotspot() timer to immediately show the failure by resetting the UI to client mode
+        wifiForceHotspot(i, -1);
+        wifiUpdateDevices();
+      }
+    }
+  } else {
+    const ms = mac.split(':');
+    const name = 'BELABOX_' + ms[4] + ms[5];
+    const password = crypto.randomBytes(9).toString('base64');
+
+    // Temporary hotspot config to send to the client
+    i.hotspot.name = name;
+    i.hotspot.password = password;
+    i.hotspot.channel = 'auto';
+    wifiForceHotspot(i, 7000);
+    wifiBroadcastState();
+
+    // Create the NM connection for the hotspot
+    const uuid = await nmHotspot(i.ifname, name, password);
+    if (uuid) {
+      // Update any settings that we need different from the default
+      await nmConnSetFields(uuid, {'connection.interface-name': '',
+                                   'connection.autoconnect': 'yes',
+                                   'connection.autoconnect-priority': 999,
+                                   '802-11-wireless.mac-address': mac,
+                                   '802-11-wireless-security.pmf': 'disable'});
+      // The updated settings will allow the connection to be recognised as our Hotspot connection
+      await wifiUpdateSavedConns();
+      // Restart the connection with the updated settings (needed to disable pmf)
+      await nmConnect(uuid, 5);
+    } else {
+      // Remove the wifiForceHotspot() timer to immediately show the failure by resetting the UI to client mode
+      wifiForceHotspot(i, -1);
+      wifiUpdateDevices();
+    }
+  }
+}
+
+async function wifiHotspotStop(msg) {
+  if (!msg.device) return;
+
+  const mac = wifiIdToHwAddr[msg.device];
+  if (!mac) return;
+
+  const i = wifiIfs[mac];
+  if (!i) return;
+  if (!wifiIfIsHotspot(i)) return; // not in hotspot mode, nothing to do
+
+  await nmConnSetFields(i.hotspot.conn, {'connection.autoconnect': 'no'});
+
+  if (await nmDisconnect(i.hotspot.conn)) {
+    i.conn = null;
+    i.available.clear();
+    wifiBroadcastState();
+    wifiRescan();
+  }
+}
+
+function _wifiIfIsHotspot(wifi) {
+  return wifi && wifi.hotspot && wifi.hotspot.conn && wifi.conn == wifi.hotspot.conn;
+}
+
+function wifiIfIsHotspot(wifi) {
+  return _wifiIfIsHotspot(wifi) || (wifi.hotspot.forceHotspotStatus > getms());
+}
+
+function nmConnSetHotspotFields(uuid, name, password, channel) {
+  // Validate the requested channel
+  const newChannel = wifiChannels[channel];
+  if (!newChannel) return;
+
+  const settingsToChange = {
+    '802-11-wireless.ssid': name,
+    '802-11-wireless-security.psk': password,
+    '802-11-wireless.band': newChannel.nmBand,
+    '802-11-wireless.channel': newChannel.nmChannel
+  };
+
+  return nmConnSetFields(uuid, settingsToChange);
+}
+
+/*
+  Expects:
+  {
+    device: device id,
+    name,
+    password,
+    channel  // from wifiChannels
+  }
+*/
+async function wifiHotspotConfig(conn, msg) {
+  // Find the Wifi interface
+  if (!msg.device) return;
+
+  const mac = wifiIdToHwAddr[msg.device];
+  if (!mac) return;
+
+  const i = wifiIfs[mac];
+  if (!i) return;
+  if (!wifiIfIsHotspot(i)) return; // Make sure the interface is already in hotspot mode
+
+  const senderId = conn.senderId;
+
+  // Make sure all required fields are present and valid
+  if (msg.name === undefined || typeof msg.name != 'string' ||
+      msg.name.length < 1 || msg.name.length > 32) {
+    conn.send(buildMsg('wifi', {hotspot: {config: {device: msg.device, error: 'name'}}}, senderId));
+    return;
+  }
+
+  if (msg.password === undefined || typeof msg.password != 'string' ||
+      msg.password.length < 8 || msg.password.length > 64) {
+    conn.send(buildMsg('wifi', {hotspot: {config: {device: msg.device, error: 'password'}}}, senderId));
+    return;
+  }
+
+  if (msg.channel === undefined || typeof msg.channel != 'string' || !wifiChannels[msg.channel]) {
+    conn.send(buildMsg('wifi', {hotspot: {config: {device: msg.device, error: 'channel'}}}, senderId));
+    return;
+  }
+
+  // Update the NM connection
+  if (!(await nmConnSetHotspotFields(i.hotspot.conn, msg.name, msg.password, msg.channel))) {
+    conn.send(buildMsg('wifi', {hotspot: {config: {device: msg.device, error: 'saving'}}}, senderId));
+    return;
+  }
+
+  // Restart the connection with the updated config
+  wifiForceHotspot(i, 7000);
+  if (!(await nmConnect(i.hotspot.conn, 5))) {
+    conn.send(buildMsg('wifi', {hotspot: {config: {device: msg.device, error: 'activating'}}}, senderId));
+    // Failed to bring up the hotspot with the new settings; restore it
+    wifiForceHotspot(i, 7000);
+    await nmConnSetHotspotFields(i.hotspot.conn, i.hotspot.name, i.hotspot.password, i.hotspot.channel);
+    await nmConnect(i.hotspot.conn);
+    return;
+  }
+
+  // Succesfully brought up the hotspot with the new settings, reload the NM connection
+  await wifiUpdateSavedConns();
+
+  conn.send(buildMsg('wifi', {hotspot: {config: {device: msg.device, success: true}}}, senderId));
+}
+
 function handleWifi(conn, msg) {
   for (const type in msg) {
     switch(type) {
@@ -1478,6 +1813,15 @@ function handleWifi(conn, msg) {
         break;
       case 'forget':
         wifiForget(msg[type]);
+        break;
+      case 'hotspot':
+        if (msg[type].start) {
+          wifiHotspotStart(msg[type].start);
+        } else if (msg[type].stop) {
+          wifiHotspotStop(msg[type].stop);
+        } else if (msg[type].config) {
+          wifiHotspotConfig(conn, msg[type].config);
+        }
         break;
     }
   }
@@ -1499,8 +1843,9 @@ function handleWifi(conn, msg) {
   10 - support for the get_syslog command
   11 - support for the asrc and acodec settings
   12 - support for receiving relay accounts and relay servers
+  13 - wifi hotspot mode
 */
-const remoteProtocolVersion = 12;
+const remoteProtocolVersion = 13;
 const remoteEndpointHost = 'remote.belabox.net';
 const remoteEndpointPath = '/ws/remote';
 const remoteTimeout = 5000;
