@@ -327,12 +327,18 @@ async function getPipelineList() {
 let netif = {};
 
 function setNetifError(int, err) {
+  if (!int) return;
+
   int.enabled = false;
   int.error = err;
 }
 
 function setNetifDup(int) {
   setNetifError(int, 'duplicate IP addr');
+}
+
+function setNetifHotspot(int) {
+  setNetifError(int, 'WiFi hotspot');
 }
 
 function updateNetif() {
@@ -403,7 +409,9 @@ function updateNetif() {
       // Detect duplicate IP adddresses and set error status
       for (const i in newints) {
         const int = newints[i];
-        delete int.error;
+        if (int.error == 'duplicate IP addr') {
+          delete int.error;
+        }
 
         if (intAddrs[int.ip] === undefined) {
           intAddrs[int.ip] = i;
@@ -775,6 +783,8 @@ async function updateGw() {
   let goodIf;
   for (const addr of addrs) {
     for (const i in netif) {
+      if (netif[i].error) continue;
+
       console.log(`Probing internet connectivity via ${i} (${netif[i].ip})`);
       if (await checkConnectivity(addr, netif[i].ip)) {
         console.log(`Internet reachable via ${i} (${netif[i].ip})`);
@@ -1473,6 +1483,22 @@ async function wifiUpdateDevices() {
   }
   if (newDevices || statusChange) {
     wifiBroadcastState();
+
+    // Mark any WiFi hotspot interfaces as unavailable for bonding
+    let hotspotCount = 0;
+    for (const i in wifiIfs) {
+      if (wifiIfIsHotspot(wifiIfs[i])) {
+        const n = netif[wifiIfs[i].ifname];
+        if (!n) continue;
+        if (n.error) continue;
+
+        setNetifHotspot(n);
+        hotspotCount++;
+      }
+    }
+    if (hotspotCount && isStreaming) {
+      updateSrtlaIps();
+    }
   }
   console.log(wifiIfs);
 
