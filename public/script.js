@@ -1305,12 +1305,11 @@ document.getElementById("startStop").addEventListener("click", () => {
 
 function updateNetact(isActive) {
   if (isActive) {
-    $('.netact').attr('disabled', false);
-    checkRemoteKey();
-    $('.set-password').trigger('input');
+    $('.netact, .recheck-netact').attr('disabled', false);
+    $('.recheck-netact').trigger('input');
     showSoftwareUpdates(false);
   } else {
-    $('.netact').attr('disabled', true);
+    $('.netact, .recheck-netact').attr('disabled', true);
     updateButtonEnabledDisabled(false);
   }
 }
