@@ -776,7 +776,7 @@ function wifiListAvailableNetwork(device, deviceId, a) {
         <span class="ssid" onClick="wifiConnect(this)"></span>
       </td>
       <td class="text-right px-0">
-        <button class="d-none btn btn-warning px-1 py-0 disconnect btn-sm btn-netact"
+        <button class="d-none btn btn-warning px-1 py-0 disconnect btn-sm netact"
                 onClick="wifiDisconnect(this)" title="Disconnect">
           <span class="font-weight-bold button-icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-wifi-off" viewBox="0 0 16 16">
@@ -785,7 +785,7 @@ function wifiListAvailableNetwork(device, deviceId, a) {
           </span>
           <span class="button-text">Disconnect</span>
         </button>
-        <button class="d-none btn btn-danger px-1 py-0 forget btn-sm btn-netact"
+        <button class="d-none btn btn-danger px-1 py-0 forget btn-sm netact"
                 onClick="wifiForget(this)" title="Forget">
           <span class="font-weight-bold button-icon">&#128465;</span>
           <span class="button-text">Forget</span>
@@ -825,7 +825,7 @@ function wifiListSavedNetwork(ssid, uuid) {
     <tr class="network">
       <td class="ssid col-11"></td>
       <td class="col-1">
-        <button class="btn btn-danger px-1 py-0 forget btn-sm btn-netact"
+        <button class="btn btn-danger px-1 py-0 forget btn-sm netact"
                 onClick="wifiForget(this)" title="Forget">
           <span class="font-weight-bold button-icon">&#128465;</span>
           <span class="button-text">Forget</span>
@@ -1305,12 +1305,12 @@ document.getElementById("startStop").addEventListener("click", () => {
 
 function updateNetact(isActive) {
   if (isActive) {
-    $('.btn-netact').attr('disabled', false);
+    $('.netact').attr('disabled', false);
     checkRemoteKey();
     $('.set-password').trigger('input');
     showSoftwareUpdates(false);
   } else {
-    $('.btn-netact').attr('disabled', true);
+    $('.netact').attr('disabled', true);
     updateButtonEnabledDisabled(false);
   }
 }

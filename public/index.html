@@ -60,7 +60,7 @@
         <form>
           <input type="password" id="password" class="form-control input_user" placeholder="password">
           <label class="mt-2"><input type="checkbox" class="rememberMe"> remember me</label>
-          <button type="submit" class="btn btn-block mt-0 btn-success btn-netact">Login</button>
+          <button type="submit" class="btn btn-block mt-0 btn-success netact">Login</button>
         </form>
       </div>
 
@@ -79,7 +79,7 @@
                 </div> <!-- .input-group-append -->
               </div> <!-- .input-group -->
               <label class="mt-2"><input type="checkbox" class="rememberMe"> remember me</label>
-              <button type="submit" class="btn btn-block mt-0 btn-success btn-netact">Set password</button>
+              <button type="submit" class="btn btn-block mt-0 btn-success netact">Set password</button>
             </div> <!-- .form-group -->
           </form>
 
@@ -88,7 +88,7 @@
 
       <div id="main" class="d-none mb-2">
         <div class="mb-4">
-          <button type="button" id="startStop" class="btn btn-lg btn-block mb-2 btn-netact">
+          <button type="button" id="startStop" class="btn btn-lg btn-block mb-2 netact">
             Start
           </button>
 
@@ -280,24 +280,24 @@
                     <input type="password" class="form-control click-copy" id="sshPassword" readonly/>
                     <div class="input-group-append">
                       <button class="btn btn-outline-secondary showHidePassword" type="button">Show</button>
-                      <button class="btn btn-outline-danger btn-netact" id="resetSshPass" type="button">Reset</button>
+                      <button class="btn btn-outline-danger netact" id="resetSshPass" type="button">Reset</button>
                     </div>
                   </div>
 
-                  <button type="button" id="startSsh" class="btn btn-block btn-success command-btn btn-netact mt-2 d-none">
+                  <button type="button" id="startSsh" class="btn btn-block btn-success command-btn netact mt-2 d-none">
                     Start SSH server
                   </button>
-                  <button type="button" id="stopSsh" class="btn btn-block btn-danger command-btn btn-netact mt-2 d-none">
+                  <button type="button" id="stopSsh" class="btn btn-block btn-danger command-btn netact mt-2 d-none">
                     Stop SSH server
                   </button>
                 </div>
 
-                <button type="button" id="getLog" class="btn btn-block btn-primary command-btn btn-netact"
+                <button type="button" id="getLog" class="btn btn-block btn-primary command-btn netact"
                         data-confirmation="The log contains sensitive information such as passwords. Only share it with trusted individuals">
                   Download BELABOX log
                 </button>
 
-                <button type="button" id="getSyslog" class="btn btn-block btn-primary command-btn btn-netact"
+                <button type="button" id="getSyslog" class="btn btn-block btn-primary command-btn netact"
                         data-confirmation="The log contains sensitive information such as passwords. Only share it with trusted individuals">
                   Download full system log
                 </button>
@@ -349,17 +349,17 @@
                   </div> <!-- .form-group -->
                 </form>
 
-                <button type="button" id="softwareUpdate" class="btn btn-block btn-primary btn-netact d-none" disabled>
+                <button type="button" id="softwareUpdate" class="btn btn-block btn-primary netact d-none" disabled>
                   Software update <span class="desc"></span>
                 </button>
 
-                <button type="button" id="logout" class="btn btn-block btn-warning btn-netact">
+                <button type="button" id="logout" class="btn btn-block btn-warning netact">
                   Logout
                 </button>
-                <button type="button" id="poweroff" class="btn btn-block btn-danger command-btn btn-netact">
+                <button type="button" id="poweroff" class="btn btn-block btn-danger command-btn netact">
                   Power off
                 </button>
-                <button type="button" id="reboot" class="btn btn-block btn-danger command-btn btn-netact">
+                <button type="button" id="reboot" class="btn btn-block btn-danger command-btn netact">
                   Restart
                 </button>
                 <div class="mt-3 text-secondary text-center small" id="revisions"></div>
