@@ -1781,12 +1781,10 @@ async function wifiHotspotStop(msg) {
   }
 }
 
-function _wifiIfIsHotspot(wifi) {
-  return wifi && wifi.hotspot && wifi.hotspot.conn && wifi.conn == wifi.hotspot.conn;
-}
-
 function wifiIfIsHotspot(wifi) {
-  return _wifiIfIsHotspot(wifi) || (wifi.hotspot.forceHotspotStatus > getms());
+  if (!wifi || !wifi.hotspot) return false;
+  return ((wifi.hotspot.conn && wifi.conn == wifi.hotspot.conn) ||
+          (wifi.hotspot.forceHotspotStatus > getms()));
 }
 
 function nmConnSetHotspotFields(uuid, name, password, channel) {
