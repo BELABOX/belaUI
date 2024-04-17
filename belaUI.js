@@ -1129,16 +1129,16 @@ async function nmScanResults(fields) {
   }
 }
 
-async function nmHotspot(device, ssid, password) {
+async function nmHotspot(device, ssid, password, timeout = undefined) {
   try {
-    const result = await execFileP("nmcli", [
-      "-w", "15",
+    const timeoutArgs = timeout ? ["-w", timeout] : [];
+    const result = await execFileP("nmcli", timeoutArgs.concat([
       "device", "wifi",
       "hotspot",
       "ssid", ssid,
       "password", password,
       "ifname", device
-    ]);
+    ]));
 
     const uuid = result.stdout.match(/successfully activated with '(.+)'/);
     return uuid[1];
@@ -1699,6 +1699,9 @@ function wifiForceHotspot(wifi, ms) {
   }
 }
 
+const HOTSPOT_UP_TO = 10;
+const HOTSPOT_UP_FORCE_TO = (HOTSPOT_UP_TO + 2) * 1000;
+
 async function wifiHotspotStart(msg) {
   if (!msg.device) return;
 
@@ -1716,10 +1719,10 @@ async function wifiHotspotStart(msg) {
          seconds before NM will show us as 'connected' to our hotspot connection.
          We use wifiForceHotspot() to ensure the device is reported in hotspot mode for this duration
       */
-      wifiForceHotspot(i, 7000);
+      wifiForceHotspot(i, HOTSPOT_UP_FORCE_TO);
       wifiBroadcastState();
 
-      if (await nmConnect(i.hotspot.conn, 5)) {
+      if (await nmConnect(i.hotspot.conn, HOTSPOT_UP_TO)) {
         await nmConnSetFields(i.hotspot.conn, {'connection.autoconnect': 'yes',
                                                'connection.autoconnect-priority': 999});
       } else {
@@ -1737,11 +1740,11 @@ async function wifiHotspotStart(msg) {
     i.hotspot.name = name;
     i.hotspot.password = password;
     i.hotspot.channel = 'auto';
-    wifiForceHotspot(i, 7000);
+    wifiForceHotspot(i, HOTSPOT_UP_FORCE_TO);
     wifiBroadcastState();
 
     // Create the NM connection for the hotspot
-    const uuid = await nmHotspot(i.ifname, name, password);
+    const uuid = await nmHotspot(i.ifname, name, password, HOTSPOT_UP_TO);
     if (uuid) {
       // Update any settings that we need different from the default
       await nmConnSetFields(uuid, {'connection.interface-name': '',
@@ -1752,7 +1755,8 @@ async function wifiHotspotStart(msg) {
       // The updated settings will allow the connection to be recognised as our Hotspot connection
       await wifiUpdateSavedConns();
       // Restart the connection with the updated settings (needed to disable pmf)
-      await nmConnect(uuid, 5);
+      wifiForceHotspot(i, HOTSPOT_UP_FORCE_TO);
+      await nmConnect(uuid, HOTSPOT_UP_TO);
     } else {
       // Remove the wifiForceHotspot() timer to immediately show the failure by resetting the UI to client mode
       wifiForceHotspot(i, -1);
@@ -1773,6 +1777,7 @@ async function wifiHotspotStop(msg) {
 
   await nmConnSetFields(i.hotspot.conn, {'connection.autoconnect': 'no'});
 
+  wifiForceHotspot(i, -1);
   if (await nmDisconnect(i.hotspot.conn)) {
     i.conn = null;
     i.available.clear();
@@ -1849,13 +1854,13 @@ async function wifiHotspotConfig(conn, msg) {
   }
 
   // Restart the connection with the updated config
-  wifiForceHotspot(i, 7000);
-  if (!(await nmConnect(i.hotspot.conn, 5))) {
+  wifiForceHotspot(i, HOTSPOT_UP_FORCE_TO);
+  if (!(await nmConnect(i.hotspot.conn, HOTSPOT_UP_TO))) {
     conn.send(buildMsg('wifi', {hotspot: {config: {device: msg.device, error: 'activating'}}}, senderId));
     // Failed to bring up the hotspot with the new settings; restore it
-    wifiForceHotspot(i, 7000);
+    wifiForceHotspot(i, HOTSPOT_UP_FORCE_TO);
     await nmConnSetHotspotFields(i.hotspot.conn, i.hotspot.name, i.hotspot.password, i.hotspot.channel);
-    await nmConnect(i.hotspot.conn);
+    await nmConnect(i.hotspot.conn, HOTSPOT_UP_TO);
     return;
   }
 
