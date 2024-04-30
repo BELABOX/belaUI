@@ -188,6 +188,10 @@ wss.on('connection', function connection(conn) {
       console.log(`Error parsing client message: ${err.message}`);
     }
   });
+
+  conn.on('close', function close() {
+    removeLogListener(conn);
+  });
 });
 
 
@@ -3663,6 +3667,134 @@ function stripPasswords(obj) {
   return copy;
 }
 
+/* Log viewer */
+let logListeners = [];
+const LOGSECRETREGEX = /<(\w+)>/gm;
+const LOGSECRET = "****";
+
+function spawnLogStream() {
+  const args = ['-o', 'json', '--all', '-fu', 'belaUI'];
+  const journalctl = spawn('journalctl', args);
+
+  journalctl.stdout.on('data', (chunk) => {
+    if (logListeners.length == 0) {
+      journalctl.stdin.pause();
+      journalctl.kill();
+
+      return;
+    }
+
+    processLogStream(chunk.toString(), (msg) => {
+      let { MESSAGE, _COMM, __REALTIME_TIMESTAMP } = msg;
+
+      for (c of logListeners) {
+        let json = {
+          comm: _COMM,
+          timestamp: +__REALTIME_TIMESTAMP,
+          message: hideSensitiveInfo(MESSAGE.replace(LOGSECRETREGEX, LOGSECRET)),
+        };
+
+        if (json.message.includes("keepalive")) continue;
+
+        if (!c.logHideSensitive) {
+          const matches = [...MESSAGE.matchAll(LOGSECRETREGEX)];
+
+          if (matches.length > 0) {
+            matches.map((m) => (MESSAGE = MESSAGE.replace(m[0], m[1])));
+          }
+
+          json.message = MESSAGE;
+        }
+
+        c.send(buildMsg('logStream', json))
+      };
+    });
+  });
+}
+
+function hideSensitiveInfo(sentence) {
+  sentence = hideRegex(sentence, /"auth":{"\w+":"(.*?)"/gm)
+  sentence = hideWord(sentence, config.srt_streamid)
+  sentence = hideWord(sentence, config.srtla_addr)
+  sentence = hideWord(sentence, config.password_hash)
+
+  return sentence;
+}
+
+function hideWord(s, word) {
+  if (s.includes(word)) {
+    return s.replaceAll(word, LOGSECRET);
+  }
+
+  return s;
+}
+
+function hideRegex(s, regex) {
+  const matches = [...s.matchAll(regex)];
+
+  if (matches.length > 0) {
+    matches.map((m) => (s = s.replace(m[1], LOGSECRET)));
+  }
+
+  return s;
+}
+
+let partialJson = '';
+let prevPartial = false;
+function processLogStream(msg, cb) {
+  if (prevPartial) {
+    msg = `${partialJson}${msg}`;
+    prevPartial = false;
+    partialJson = '';
+  }
+
+  for (const chunk of msg.trim().split('\n')) {
+    try {
+      cb(JSON.parse(chunk));
+    } catch (error) {
+      partialJson += chunk;
+      prevPartial = true;
+    }
+  }
+}
+
+function subscribeLogStream(conn, { show, hideSensitive }) {
+  if (!show) {
+    removeLogListener(conn);
+    return;
+  }
+
+  if (logListeners.length == 0) spawnLogStream();
+
+  if (!logListeners.includes(conn)) {
+    conn.logHideSensitive = hideSensitive;
+    logListeners.push(conn);
+  }
+}
+
+function removeLogListener(conn) {
+  logListeners = logListeners.filter((l) => l != conn);
+}
+
+function downloadLog(conn, { hideSensitive }) {
+  const args = ['-u', 'belaUI', '-b'];
+  const journalctl = spawn('journalctl', args);
+
+  journalctl.stdout.on('data', (chunk) => {
+    if (hideSensitive) {
+      const chunkString = hideSensitiveInfo(chunk.toString().replace(LOGSECRETREGEX, LOGSECRET));
+      chunk = Buffer.from(chunkString);
+    }
+
+    conn.send(buildMsg('logDownload', { chunk }));
+  });
+
+  journalctl.on('close', () => {
+    conn.send(buildMsg('logDownload', { completed: true }));
+  });
+}
+
+
 function handleMessage(conn, msg, isRemote = false) {
   // log all received messages except for keepalives
   if (Object.keys(msg).length > 1 || msg.keepalive === undefined) {
@@ -3728,6 +3860,12 @@ function handleMessage(conn, msg, isRemote = false) {
         delete conn.isAuthed;
         delete conn.authToken;
 
+        break;
+      case 'subscribeLogStream':
+        subscribeLogStream(conn, msg[type]);
+        break;
+      case 'downloadLog':
+        downloadLog(conn, msg[type]);
         break;
     }
   }
