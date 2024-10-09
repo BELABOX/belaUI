@@ -905,6 +905,26 @@ function wifiDeviceListGetInetAddr(ifname) {
 
 
 /* NetworkManager / nmcli helpers */
+async function nmConnAdd(fields) {
+  try {
+    let args = [
+      "connection",
+      "add"
+    ];
+    for (const field in fields) {
+      args.push(field);
+      args.push(fields[field]);
+    }
+    const result = await execFileP("nmcli", args);
+    const success = result.stdout.match(/Connection '.+' \((.+)\) successfully added./);
+
+    if (success) return success[1];
+
+  } catch ({message}) {
+    console.log(`nmConnNew err: ${message}`);
+  }
+}
+
 async function nmConnsGet(fields) {
   try {
     const result = await execFileP("nmcli", [
