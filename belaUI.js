@@ -1860,6 +1860,150 @@ function handleWifi(conn, msg) {
 }
 
 
+/*
+  mmcli helpers
+*/
+function mmcliParseSep(input) {
+  let output = {};
+  for (let line of input.split('\n')) {
+    line = line.replace(/\\\d+/g, ''); // strips special escaped characters
+    if (!line) continue;
+
+    const kv = line.split(/:(.*)/); // splits on the first ':' only
+    if (kv.length != 3) {
+      console.log(`mmcliParseSep: error parsing line ${line}`);
+      continue;
+    }
+    let key = kv[0].trim();
+    let value = kv[1].trim();
+
+    // Parse mmcli arrays
+    let pattern = /\.length$/;
+    if (key.match(pattern)) {
+      key = key.replace(pattern, '');
+      value = [];
+    }
+    pattern = /\.value\[\d+\]$/;
+    if (key.match(pattern)) {
+      key = key.replace(pattern, '');
+      output[key].push(value);
+      continue;
+    }
+
+    // skip empty values
+    if (value == '--') continue;
+
+    output[key] = value;
+  }
+
+  return output;
+}
+
+function mmConvertNetworkType(mmType) {
+  const typeMatch = mmType.match(/^allowed: (.+); preferred: (.+)$/);
+  const label = typeMatch[1].split(/,? /).sort().reverse().join('');
+  const allowed = typeMatch[1].replace(/,? /g, '|');
+  const preferred = typeMatch[2];
+  return {label, allowed, preferred};
+}
+
+function mmConvertNetworkTypes(mmTypes) {
+  const types = {};
+  for (const mmType of mmTypes) {
+    const type = mmConvertNetworkType(mmType);
+    if (!types[type.label] || types[type.label].preferred == 'none' || types[type.label].preferred < type.preferred) {
+      types[type.label] = {allowed: type.allowed, preferred: type.preferred};
+    }
+  }
+  return types;
+}
+
+function mmConvertAccessTech(accessTechs) {
+  if (!accessTechs || accessTechs.length == 0) {
+    return;
+  }
+  switch (accessTechs[0]) {
+    case 'umts':
+      return '3G';
+    case 'hsdpa':
+      return '3G+';
+    case 'lte':
+      return '4G';
+  }
+  return accessTechs[0];
+}
+
+async function mmList() {
+  try {
+    const result = await execFileP("mmcli", ["-K", "-L"]);
+    const modems = mmcliParseSep(result.stdout.toString("utf-8"))['modem-list'];
+    let list = [];
+    for (const m of modems) {
+      const id = m.match(/\/org\/freedesktop\/ModemManager1\/Modem\/(\d+)/);
+      if (id) {
+        list.push(parseInt(id[1]));
+      }
+    }
+    return list;
+  } catch ({message}) {
+    console.log(`mmList err: ${message}`);
+  }
+}
+
+async function mmGetModem(id) {
+  try {
+    const result = await execFileP("mmcli", ["-K", "-m", id]);
+    return mmcliParseSep(result.stdout.toString("utf-8"));
+  } catch ({message}) {
+    console.log(`mmGetModem err: ${message}`);
+  }
+}
+
+async function mmGetSim(id) {
+  try {
+    const result = await execFileP("mmcli", ["-K", "-i", id]);
+    return mmcliParseSep(result.stdout.toString("utf-8"));
+  } catch ({message}) {
+    console.log(`mmGetSim err: ${message}`);
+  }
+}
+
+async function mmSetNetworkTypes(id, allowed, preferred) {
+  try {
+    let args = [
+      "-m", id,
+      `--set-allowed-modes=${allowed}`
+    ];
+    if (preferred != 'none') {
+      args.push(`--set-preferred-mode=${preferred}`);
+    }
+    const result = await execFileP("mmcli", args);
+    return result.stdout.match(/successfully set current modes in the modem/);
+  } catch ({message}) {
+    console.log(`mmSetNetworkTypes err: ${message}`);
+  }
+}
+
+async function mmNetworkScan(id, timeout=120) {
+  try {
+    const result = await execFileP("mmcli", [`--timeout=${timeout}`, "-K", "-m", id, "--3gpp-scan"]);
+    const networks = mmcliParseSep(result.stdout.toString("utf-8"))['modem.3gpp.scan-networks'];
+    const parsed = networks.map(function(n) {
+      const info = n.split(/, */);
+      const output = {};
+      for (const entry of info) {
+        const kv = entry.split(/: */);
+        output[kv[0]] = kv[1];
+      }
+      return output;
+    });
+    return parsed;
+  } catch ({message}) {
+    console.log(`mmNetworkScan err: ${message}`);
+  }
+}
+
+
 /* Remote */
 /*
   A brief remote protocol version history:
