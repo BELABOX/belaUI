@@ -261,68 +261,6 @@ function broadcastMsgExcept(conn, type, data) {
 }
 
 
-/* Read the list of pipeline files */
-function readDirAbsPath(dir, excludePattern) {
-  const pipelines = {};
-
-  try {
-    const files = fs.readdirSync(dir);
-    const basename = path.basename(dir);
-
-    for (const f in files) {
-      const name = basename + '/' + files[f];
-      if (excludePattern && name.match(excludePattern)) continue;
-
-      const id = crypto.createHash('sha1').update(name).digest('hex');
-      const path = dir + files[f];
-      pipelines[id] = {name: name, path: path};
-    }
-  } catch (err) {
-    console.log(`Failed to read the pipeline files in ${dir}:`);
-    console.log(err);
-  };
-
-  return pipelines;
-}
-
-async function getPipelines() {
-  const ps = {};
-  Object.assign(ps, readDirAbsPath(belacoderPipelinesDir + '/custom/'));
-
-  // Get the hardware-specific pipelines
-  let excludePipelines;
-  if (setup.hw == 'rk3588' && !fs.existsSync('/dev/hdmirx')) {
-    excludePipelines = 'h265_hdmi';
-  }
-  Object.assign(ps, readDirAbsPath(belacoderPipelinesDir + `/${setup.hw}/`, excludePipelines));
-
-  Object.assign(ps, readDirAbsPath(belacoderPipelinesDir + '/generic/'));
-
-  for (const p in ps) {
-    const props = await pipelineGetAudioProps(ps[p].path)
-    Object.assign(ps[p], props);
-  }
-
-  return ps;
-}
-
-async function searchPipelines(id) {
-  const pipelines = await getPipelines();
-  if (pipelines[id]) return pipelines[id];
-  return null;
-}
-
-// pipeline list in the format needed by the frontend
-async function getPipelineList() {
-  const pipelines = await getPipelines();
-  const list = {};
-  for (const id in pipelines) {
-    list[id] = {name: pipelines[id].name, asrc: pipelines[id].asrc, acodec: pipelines[id].acodec};
-  }
-  return list;
-}
-
-
 /* Network interface list */
 let netif = {};
 
@@ -2501,9 +2439,9 @@ addAudioCardById(audioDevices, noAudioId);
 addAudioCardById(audioDevices, defaultAudioId);
 
 
-async function pipelineGetAudioProps(path) {
+function pipelineGetAudioProps(path) {
   const props = {};
-  const contents = await readTextFile(path);
+  const contents = fs.readFileSync(path, 'utf8');
   props.asrc = contents.match(alsaPipelinePattern) != null;
   props.acodec = contents.match(audioCodecPattern) != null;
   return props;
@@ -2593,6 +2531,67 @@ async function updateAudioDevices() {
   broadcastMsg('status', {asrcs: Object.keys(audioDevices)});
 }
 updateAudioDevices();
+
+
+/* Read the list of pipeline files */
+function readDirAbsPath(dir, excludePattern) {
+  const pipelines = {};
+
+  try {
+    const files = fs.readdirSync(dir);
+    const basename = path.basename(dir);
+
+    for (const f in files) {
+      const name = basename + '/' + files[f];
+      if (excludePattern && name.match(excludePattern)) continue;
+
+      const id = crypto.createHash('sha1').update(name).digest('hex');
+      const path = dir + files[f];
+      pipelines[id] = {name: name, path: path};
+    }
+  } catch (err) {
+    console.log(`Failed to read the pipeline files in ${dir}:`);
+    console.log(err);
+  };
+
+  return pipelines;
+}
+
+function getPipelines() {
+  const ps = {};
+  Object.assign(ps, readDirAbsPath(belacoderPipelinesDir + '/custom/'));
+
+  // Get the hardware-specific pipelines
+  let excludePipelines;
+  if (setup.hw == 'rk3588' && !fs.existsSync('/dev/hdmirx')) {
+    excludePipelines = 'h265_hdmi';
+  }
+  Object.assign(ps, readDirAbsPath(belacoderPipelinesDir + `/${setup.hw}/`, excludePipelines));
+
+  Object.assign(ps, readDirAbsPath(belacoderPipelinesDir + '/generic/'));
+
+  for (const p in ps) {
+    const props = pipelineGetAudioProps(ps[p].path)
+    Object.assign(ps[p], props);
+  }
+
+  return ps;
+}
+const pipelines = getPipelines();
+
+function searchPipelines(id) {
+  if (pipelines[id]) return pipelines[id];
+  return null;
+}
+
+// pipeline list in the format needed by the frontend
+function getPipelineList() {
+  const list = {};
+  for (const id in pipelines) {
+    list[id] = {name: pipelines[id].name, asrc: pipelines[id].asrc, acodec: pipelines[id].acodec};
+  }
+  return list;
+}
 
 
 /*
@@ -3601,9 +3600,9 @@ function sendStatus(conn) {
                                 asrcs: Object.keys(audioDevices)}));
 }
 
-async function sendInitialStatus(conn) {
+function sendInitialStatus(conn) {
   conn.send(buildMsg('config', config));
-  conn.send(buildMsg('pipelines', await getPipelineList()));
+  conn.send(buildMsg('pipelines', getPipelineList()));
   if (relaysCache)
     conn.send(buildMsg('relays', buildRelaysMsg()));
   sendStatus(conn);
