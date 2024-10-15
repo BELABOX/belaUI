@@ -125,10 +125,17 @@ function handleAuthResult(msg) {
     if (msg.auth_token) {
       localStorage.setItem('authToken', msg.auth_token);
     }
+    // Reset state
+    modems = {};
+    wifiIfs = {};
+
+    // Reset the UI
     $('#login').addClass('d-none');
     $('#initialPasswordForm').addClass('d-none');
     hideError();
     $('#notifications').empty();
+    $('#wifi').empty();
+    $('#modemManager').empty();
     $('#main').removeClass('d-none');
     $('#themeSelector').removeClass('d-none');
   } else if (!isShowingInitialPasswordForm) {
@@ -463,6 +470,10 @@ function updateStatus(status) {
 
   if (status.wifi) {
     updateWifiState(status.wifi);
+  }
+
+  if (status.modems) {
+    updateModemsState(status.modems);
   }
 
   if (status.asrcs) {
@@ -1144,6 +1155,270 @@ function handleWifiResult(msg) {
           errorField.removeClass('d-none');
         }
       }
+    }
+  }
+}
+
+
+/* Modem manager */
+function modemFindCardId(deviceId) {
+  return `modemManager${parseInt(deviceId)}`;
+}
+
+let modems = {};
+function updateModemsState(msg) {
+  for (const i in modems) {
+    modems[i].removed = true;
+  }
+
+  for (let deviceId in msg) {
+    if (modems[deviceId]) {
+      delete modems[deviceId].removed;
+    }
+
+    const cardId = modemFindCardId(deviceId);
+    const device = msg[deviceId];
+    const modem = modems[deviceId];
+
+    let deviceCard = $(`#${cardId}`);
+
+    if (deviceCard.length == 0) {
+      const html = `
+        <div id="${cardId}" class="modem-settings card mb-2">
+          <div class="card-header bg-success text-center" type="button" data-toggle="collapse" data-target="#collapse-${cardId}">
+            <button class="btn btn-link text-white" type="button" data-toggle="collapse" data-target="#collapse-${cardId}" aria-expanded="false" aria-controls="#collapse-${cardId}">
+              Modem: <strong class="device-ifname"></strong><span class="device-name"></span>
+            </button>
+          </div>
+
+          <div class="collapse" id="collapse-${cardId}">
+            <div class="form-group px-3 py-1 mb-2 border-bottom modem-status">
+              <span class="signal d-none"></span>
+              <span class="status d-none"></span>
+              <span class="no-sim text-danger d-none">No SIM card</span>
+            </div>
+            <div class="card-body pt-0 pb-3 d-none">
+              <div class="form-group mb-1">
+                <label class="mb-0" for="networkType-${cardId}">Network type</label>
+                <select class="network-type-input custom-select" id="networkType-${cardId}"></select>
+              </div>
+              <div class="form-group mb-1">
+                <input type="checkbox" class="roaming-input" id="roaming-${cardId}">
+                <label class="mb-0" for="roaming-${cardId}">Allow roaming</label>
+              </div>
+              <div class="form-group mb-1 network-selection-group">
+                <label class="mb-0" for="networkSelection-${cardId}">Network</label>
+                <div class="input-group">
+                  <select class="network-selection-input custom-select" id="networkSelection-${cardId}"></select>
+                  <div class="input-group-append">
+                    <button class="btn btn-outline-primary network-scan-button">Scan</button>
+                  </div>
+                </div>
+              </div>
+              <div class="form-group mb-1 autoconfig-group d-none">
+                <input type="checkbox" class="autoconfig-input" id="autoconfig-${cardId}" disabled>
+                <label class="mb-0" for="autoconfig-${cardId}">Automatic APN configuration</label>
+              </div>
+              <div class="apn-manual-config">
+                <div class="form-group mb-1">
+                  <label class="mb-0" for="apn-${cardId}">APN</label>
+                  <input type="text" class="form-control apn-input" id="apn-${cardId}">
+                </div>
+                <div class="form-group mb-1">
+                  <label class="mb-0" for="username-${cardId}">Username</label>
+                  <input type="text" class="form-control username-input" id="username-${cardId}">
+                </div>
+                <div class="form-group mb-2">
+                  <label class="mb-0" for="password-${cardId}">Password</label>
+                  <input type="text" class="form-control password-input" id="password-${cardId}">
+                </div>
+              </div>
+
+              <button class="btn btn-block btn-primary netact save-button" disabled>Save</button>
+            </div>
+          </div>
+        </div>`;
+
+      deviceCard = $($.parseHTML(html));
+
+      // Set the name
+      if (device.ifname) {
+        deviceCard.find('.device-ifname').text(device.ifname);
+        deviceCard.find('.device-name').text(` (${device.name})`);
+      } else {
+        deviceCard.find('.device-name').text(device.name);
+      }
+
+      // Show the status bar, either with the no SIM message or actual signal info
+      if (device.no_sim) {
+        deviceCard.find('.no-sim').removeClass('d-none');
+      } else {
+        deviceCard.find('.signal, .status, .card-body').removeClass('d-none');
+      }
+
+      // Dynamically show and hide network selection depending on the roaming checkbox
+      const showHideNetworkSelection = function() {
+        const checkbox = $(this);
+        const networkSelection = $(this).parents('.card-body').find('.network-selection-group');
+        if (checkbox.prop('checked')) {
+          networkSelection.removeClass('d-none');
+        } else {
+          networkSelection.addClass('d-none');
+        }
+      };
+      deviceCard.find('.roaming-input').on('change', showHideNetworkSelection);
+
+      // Check if the device supports GSM autoconfiguration
+      if (device.config && device.config.autoconfig !== undefined) {
+        // Dynamically show and hide APN settings depending on the autoconfig checkbox
+        const showHideApnConfig = function() {
+          const checkbox = $(this);
+          const apnConfigForm = $(this).parents('.card-body').find('.apn-manual-config');
+          if (checkbox.prop('checked')) {
+            apnConfigForm.addClass('d-none');
+          } else {
+            apnConfigForm.removeClass('d-none');
+          }
+        };
+        const checkbox = deviceCard.find('.autoconfig-input');
+        checkbox.on('change', showHideApnConfig);
+        checkbox.prop('disabled', false);
+        deviceCard.find('.autoconfig-group').removeClass('d-none');
+      }
+
+      const scanButton = deviceCard.find('.network-scan-button');
+      scanButton.click(function() {
+        if (confirm('Scanning for networks will temporarily disable the data connection of this modem. Proceed?')) {
+          scanButton.prop('disabled', true);
+          scanButton.text('Scanning...');
+          ws.send(JSON.stringify({modems: {scan: {device: deviceId}}}));
+        }
+      });
+
+      const getUserConfig = function(deviceCard) {
+        const network_type = deviceCard.find('.network-type-input').val();
+        const roaming = deviceCard.find('.roaming-input').prop('checked');
+        const network = deviceCard.find('.network-selection-input').val();
+        const autoconfig = deviceCard.find('.autoconfig-input').prop('checked');
+        const apn = deviceCard.find('.apn-input').val();
+        const username = deviceCard.find('.username-input').val();
+        const password = deviceCard.find('.password-input').val();
+
+        return {network_type, roaming, network, autoconfig, apn, username, password};
+      };
+
+      deviceCard.find('.save-button').click(function() {
+        const config = getUserConfig(deviceCard);
+        config.device = deviceId;
+
+        ws.send(JSON.stringify({modems: {config}}));
+
+        $(this).prop('disabled', true);
+      });
+
+      // Disable or enable the save button depending on whether any values have changed
+      const inputs = deviceCard.find('input, select');
+      inputs.on('change, input', function() {
+        if (!modems[deviceId] || !modems[deviceId].config) return false;
+
+        const userConfig = getUserConfig(deviceCard);
+        const savedConfig = Object.assign({network_type: modems[deviceId].network_type.active}, modems[deviceId].config);
+        let changed = false;
+        for (const i in savedConfig) {
+          if (userConfig[i] !== savedConfig[i]) {
+            console.log(`${i} changed`);
+            changed = true;
+            break;
+          }
+        }
+        deviceCard.find('.save-button').prop('disabled', !changed);
+      });
+
+      deviceCard.appendTo('#modemManager');
+    }
+
+    // The following settings may be updated for an existing modem
+    if (device.network_type) {
+      const options = {};
+      for (const i in device.network_type.supported) {
+        const value = device.network_type.supported[i];
+        const name = value.replace(/g/g, 'G / ').replace(/ \/ $/, '');
+        options[value] = {name};
+      }
+      deviceCard.find('.network-type-input').html(genOptionList([options], device.network_type.active));
+    }
+
+    if (device.config) {
+      deviceCard.find('.apn-input').attr('value', device.config.apn);
+      deviceCard.find('.username-input').attr('value', device.config.username);
+      deviceCard.find('.password-input').attr('value', device.config.password);
+      deviceCard.find('.roaming-input').attr('checked', device.config.roaming);
+
+      // Trigger UI updates
+      if (device.config.autoconfig !== undefined) {
+        deviceCard.find('.autoconfig-input').attr('checked', device.config.autoconfig);
+        deviceCard.find('.autoconfig-input').trigger('change');
+      }
+      deviceCard.find('.roaming-input').trigger('change');
+    }
+
+    if (device.status) {
+      deviceCard.find('.signal').html(wifiSignalSymbol(device.status.signal));
+      const statusText = `${device.status.signal}% ${device.status.network_type || ''} `+
+                         `${device.status.network || ''}${device.status.roaming ? ' (R)': ''} - ${device.status.connection}`
+      deviceCard.find('.status').text(statusText);
+    }
+
+    const networkSelect = deviceCard.find('.network-selection-input');
+    if (device.available_networks || device.config || networkSelect.find('option').length == 0) {
+        const selectedNetwork = (device.config ? device.config.network : ((modem && modem.config) ? modem.config.network : undefined));
+        const availableNetworks = device.available_networks || (modem ? modem.available_networks : {});
+        const auto = {'': {name: 'Automatic' + ((selectedNetwork == '') ? ' (selected)' : '')}};
+        const options = {};
+        for (const i in availableNetworks) {
+          let name = availableNetworks[i].name;
+          let availability = '';
+          if (i == selectedNetwork) {
+            availability = 'selected';
+          }
+          if (availableNetworks[i].availability) {
+            if (availability) {
+              availability += ' & ';
+            }
+            availability += availableNetworks[i].availability;
+          }
+          if (availability) {
+            name += ` (${availability})`
+          }
+          options[i] = {
+            name,
+            disabled: (availableNetworks[i].availability == 'forbidden')
+          };
+        }
+        networkSelect.html(genOptionList([auto, options], selectedNetwork));
+
+        // Re-enable the scan button after receiving the results
+        if (device.available_networks) {
+          const scanButton = deviceCard.find('.network-scan-button');
+          scanButton.prop('disabled', false);
+          scanButton.text('Scan');
+        }
+    }
+
+    // Update the cached modem state
+    modems[deviceId] = Object.assign(modem || {}, device);
+
+    // Disable or enable the save button if any settings have been updated
+    if (device.network_type || device.config) {
+      deviceCard.find('.network-type-input').trigger('input');
+    }
+  }
+
+  for (const i in modems) {
+    if (modems[i].removed) {
+      const cardId = modemFindCardId(i);
+      $(`#${cardId}`).remove();
+      delete modems[i];
     }
   }
 }

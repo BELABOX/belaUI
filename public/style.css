@@ -58,6 +58,10 @@ td.security {
   }
 }
 
+.modem-status {
+  background: #eee;
+}
+
 /* Dark mode theme */
 
 body.dark {
@@ -96,4 +100,8 @@ body.dark .close {
 
 body.dark .table-hover tbody tr:hover {
   color: #aaa;
+}
+
+body.dark .modem-status {
+  background: #5a6268;
 }
