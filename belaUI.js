@@ -1923,15 +1923,26 @@ function mmConvertAccessTech(accessTechs) {
   if (!accessTechs || accessTechs.length == 0) {
     return;
   }
-  switch (accessTechs[0]) {
-    case 'umts':
-      return '3G';
-    case 'hsdpa':
-      return '3G+';
-    case 'lte':
-      return '4G';
+
+  const accessTechToGen = {
+    'gsm': '2G',
+    'umts': '3G',
+    'hsdpa': '3G+',
+    'hsupa': '3G+',
+    'lte': '4G',
+    '5gnr': '5G'
+  };
+  // Return the highest gen for situations such as 5G NSA, which will report "lte, 5gnr"
+  let gen = '';
+  for (const t of accessTechs) {
+    if (accessTechToGen[t] > gen) {
+      gen = accessTechToGen[t];
+    }
   }
-  return accessTechs[0];
+
+  // If we only encountered unknown access techs, simply return the first one
+  if (!gen) return accessTechs[0];
+  return gen;
 }
 
 async function mmList() {
