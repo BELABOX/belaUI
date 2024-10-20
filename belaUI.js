@@ -289,13 +289,13 @@ function updateNetif() {
         const isRunning = flags.includes('RUNNING');
 
         // update the list of WiFi devices
-        if (name && name.match('^wlan')) {
+        if (name && name.match('^(wlan|ra)')) {
           let hwAddr = int.match(/ether ([0-9a-f:]+)/);
           if (hwAddr) {
             wiFiDeviceListAdd(name, hwAddr[1], isRunning ? inetAddr : null);
           }
         }
-
+        
         if (name == 'lo' || name.match('^docker') || name.match('^l4tbr')) continue;
 
         if (!inetAddr) continue;
