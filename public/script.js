@@ -1532,7 +1532,7 @@ function downloadLog(msg) {
 
 /* Handle server-to-client messages */
 function handleMessage(msg) {
-  console.log(msg);
+  //console.log(msg);
   for (const type in msg) {
     switch(type) {
       case 'auth':
