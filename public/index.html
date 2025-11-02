@@ -86,7 +86,7 @@
         </div>
       </div>
 
-      <div id="main" class="d-none mb-2">
+      <div id="main" class="d-none mb-0">
         <div class="mb-2">
           <button type="button" id="startStop" class="btn btn-lg btn-block mb-2 netact">
             Start
@@ -103,12 +103,12 @@
           </div>
         </div> <!-- .mb-4 -->
 
-        <table class="table mb-0">
-          <tbody id="modems"></tbody>
+        <table class="table mb-0" id="netifTable">
+          <tbody></tbody>
         </table>
 
-        <table class="table mb-2">
-          <tbody id="sensors"></tbody>
+        <table class="table mb-2" id="sensorsTable">
+          <tbody></tbody>
         </table>
 
         <div class="modal fade" id="wifiModal" tabindex="-1" role="dialog" aria-labelledby="wifiModalLabel" aria-hidden="true">
@@ -388,7 +388,7 @@
         </div> <!-- #settings -->
       </div> <!-- #main -->
 
-      <div class="text-center small d-none mb-2" id="localSettings">
+      <div class="small d-flex justify-content-center d-none mb-2" id="localSettings">
         <span class="mx-2" id="themeSelector">
           Theme:
           <select>
@@ -404,6 +404,14 @@
             <option value="autolock">On + auto-lock</option>
             <option value="on">On</option>
             <option value="off">Off</option>
+          </select>
+        </span>
+
+        <span class="mx-2" id="layoutSetting">
+          Layout:
+          <select>
+            <option value="standard">standard</option>
+            <option value="netif-first">bitrate on top</option>
           </select>
         </span>
       </div>

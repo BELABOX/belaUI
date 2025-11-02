@@ -208,7 +208,7 @@ function updateNetif(netifs) {
     modemList.unshift(totalRow);
   }
 
-  $('#modems').html(modemList);
+  $('#netifTable>tbody').html(modemList);
 }
 
 function updateSensors(sensors) {
@@ -228,7 +228,7 @@ function updateSensors(sensors) {
     sensorList.push(entry);
   }
 
-  $('#sensors').html(sensorList);
+  $('#sensorsTable>tbody').html(sensorList);
 }
 
 
@@ -2111,4 +2111,37 @@ $('#sliderLockSetting>select').change(function () {
   $('.slider').each(function () {
     initSliderLock($(this));
   });
+});
+
+/* Layout setting */
+let layoutSetting;
+function updateLayout(layout) {
+  if (layout == 'netif-first') {
+    $('body').addClass('netif-first');
+  } else {
+    $('body').removeClass('netif-first');
+  }
+  layoutSetting = layout;
+}
+
+function loadLayoutSetting() {
+  let s = localStorage.getItem('layout');
+  switch (s) {
+    case 'standard':
+    case 'netif-first':
+      break;
+    default:
+      s = 'standard';
+  }
+
+  $('#layoutSetting>select').val(s);
+
+  updateLayout(s);
+}
+loadLayoutSetting();
+
+$('#layoutSetting>select').change(function () {
+  const s = $(this).val();
+  localStorage.setItem('layout', s);
+  updateLayout(s);
 });
