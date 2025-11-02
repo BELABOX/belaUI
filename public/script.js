@@ -173,7 +173,7 @@ function genNetifEntry(error, enabled, name, ip, throughput, isBold = false) {
   const html = `
     <tr>
       <td>${checkbox}</td>
-      <td class="netif_name"></td>
+      <td class="netif_name ${isBold ? 'font-weight-bold' : ''}"></td>
       <td class="netif_ip"></td>
       <td class="netif_tp ${isBold ? 'font-weight-bold' : ''}"></td>
     </tr>`;
@@ -204,7 +204,8 @@ function updateNetif(netifs) {
   }
 
   if (Object.keys(netifs).length > 1) {
-    modemList.push(genNetifEntry(undefined, undefined, '', '', `${totalKbps} Kbps`, true));
+    const totalRow = genNetifEntry(undefined, undefined, 'Total', '', `${totalKbps} Kbps`, true);
+    modemList.unshift(totalRow);
   }
 
   $('#modems').html(modemList);
