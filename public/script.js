@@ -175,7 +175,7 @@ function genNetifEntry(error, enabled, name, ip, throughput, isBold = false) {
       <td>${checkbox}</td>
       <td class="netif_name ${isBold ? 'font-weight-bold' : ''}"></td>
       <td class="netif_ip"></td>
-      <td class="netif_tp ${isBold ? 'font-weight-bold' : ''}"></td>
+      <td class="col-6 netif_tp ${isBold ? 'font-weight-bold' : ''}"></td>
     </tr>`;
 
   const entry = $($.parseHTML(html));

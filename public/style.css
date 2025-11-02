@@ -72,6 +72,10 @@ td.security {
   background-color: #6c757d;
 }
 
+td.sensor_name {
+  width: 160px;
+}
+
 /* Dark mode theme */
 
 body.dark {
