@@ -174,7 +174,7 @@ function genNetifEntry(error, enabled, name, ip, throughput, isBold = false) {
     <tr>
       <td>${checkbox}</td>
       <td class="netif_name ${isBold ? 'font-weight-bold' : ''}"></td>
-      <td class="netif_ip"></td>
+      <td class="netif_ip ${isBold ? 'font-weight-bold' : ''}"></td>
       <td class="col-6 netif_tp ${isBold ? 'font-weight-bold' : ''}"></td>
     </tr>`;
 
@@ -194,6 +194,8 @@ function genNetifEntry(error, enabled, name, ip, throughput, isBold = false) {
 function updateNetif(netifs) {
   let modemList = [];
   let totalKbps = 0;
+  let connsEnabled = 0;
+  let connsCount = 0;
 
   for (const i in netifs) {
     data = netifs[i];
@@ -201,10 +203,21 @@ function updateNetif(netifs) {
     totalKbps += tpKbps;
 
     modemList.push(genNetifEntry(data.error, data.enabled, i, data.ip, `${tpKbps} Kbps`));
+
+    connsCount += 1;
+    if (data.enabled) {
+      connsEnabled += 1;
+    }
   }
 
-  if (Object.keys(netifs).length > 1) {
-    const totalRow = genNetifEntry(undefined, undefined, 'Total', '', `${totalKbps} Kbps`, true);
+  if (connsCount > 1) {
+    let countLabel;
+    if (connsEnabled == connsCount) {
+      countLabel = `${connsCount} conns`;
+    } else {
+      countLabel = `${connsEnabled} / ${connsCount} conns`;
+    }
+    const totalRow = genNetifEntry(undefined, undefined, 'Total', countLabel, `${totalKbps} Kbps`, true);
     modemList.unshift(totalRow);
   }
 
