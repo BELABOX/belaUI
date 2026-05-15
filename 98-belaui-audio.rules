@@ -15,9 +15,10 @@ ENV{ID_MODEL}=="OsmoAction4", ATTR{id}="OsmoAction4", GOTO="signal_belaui"
 # don't rename the OP3 audio input
 ATTR{id}=="DJIPocket3", GOTO="signal_belaui"
 
-# the OA5's and OA6's names might include part of the SN, discard it
+# the OA5's, OA6's and OP4's names might include part of the SN, discard it
 ATTR{id}=="OsmoAction5*", ATTR{id}="OsmoAction5", GOTO="signal_belaui"
 ATTR{id}=="OsmoAction6*", ATTR{id}="OsmoAction6", GOTO="signal_belaui"
+ATTR{id}=="OsmoPocket4*", ATTR{id}="OsmoPocket4", GOTO="signal_belaui"
 
 # set the id for the first USB audio card that's not a camlink 4K
 ATTR{id}="usbaudio"
