@@ -68,7 +68,11 @@ if (window.matchMedia) {
 
 
 function tryConnect() {
-  let c = new WebSocket("ws://" + window.location.host);
+  let wsProtocol = 'ws://';
+  if (window.location.protocol === 'https:') {
+    wsProtocol = 'wss://';
+  }
+  let c = new WebSocket(wsProtocol + window.location.host);
   c.addEventListener('message', function (event) {
     handleMessage(JSON.parse(event.data));
   });
