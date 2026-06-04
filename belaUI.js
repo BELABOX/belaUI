@@ -776,6 +776,10 @@ async function updateGw() {
   let goodIf;
   for (const addr of addrs) {
     for (const i in netif) {
+      // Avoid a possible race if a network interface goes down while the async checkConnectivity is running
+      // Javascript is weird
+      if (!netif[i]) continue;
+
       const error = netIfGetErrorMsg(netif[i]);
       if (error) {
         console.log(`Not probing internet connectivity via ${i} (${netif[i].ip}): ${error}`);
